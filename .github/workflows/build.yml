@@ -1,11 +1,12 @@
-name: Python package
+name: Build and Publish
 
 permissions:
   contents: write
 
 on:
   push:
-
+    tags:
+      - "*"
 
 jobs:
   build:
@@ -20,25 +21,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: "pyproject.toml"
-
-      - name: Install the project
-        run: |
-          uv sync --all-extras --dev --frozen --no-editable
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-3|${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Run linting
-        run: uv run --frozen --no-editable pre-commit run --all-files --show-diff-on-failure --color=always
-
       - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
@@ -47,7 +30,6 @@ jobs:
 
       - name: Make release with docset
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           body: |
             This is a release for the ${{ github.ref }} tag.

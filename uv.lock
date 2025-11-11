@@ -499,13 +499,11 @@ toml = [
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
     { name = "ruff" },
     { name = "ssort" },
     { name = "types-pyyaml" },
-]
-tests = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
 ]
 
 [package.metadata]
@@ -524,13 +522,11 @@ provides-extras = ["email", "regions", "toml"]
 dev = [
     { name = "mypy", specifier = ">=1.12.1" },
     { name = "pre-commit", specifier = ">=4.0.1" },
+    { name = "pytest", specifier = ">=8.3.3" },
+    { name = "pytest-cov", specifier = ">=5.0.0" },
     { name = "ruff", specifier = ">=0.7.0" },
     { name = "ssort", specifier = ">=0.13.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20240917" },
-]
-tests = [
-    { name = "pytest", specifier = ">=8.3.3" },
-    { name = "pytest-cov", specifier = ">=5.0.0" },
 ]
 
 [[package]]
