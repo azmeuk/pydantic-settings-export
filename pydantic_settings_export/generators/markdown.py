@@ -82,7 +82,7 @@ class MarkdownSettings(BaseGeneratorSettings):
 
     table_headers: list[TableHeadersEnum] = Field(
         default_factory=lambda: TableHeaders,
-        ge=1,
+        min_length=1,
         description=(
             "The headers of the table. Can be rearranged and/or removed.\n"
             "Must be at least one element and possible are:\n"
