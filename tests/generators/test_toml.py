@@ -752,3 +752,98 @@ host = "prod-db.example.com"
 port = 5433
 """
     assert result == expected
+
+
+def test_toml_generator_with_field_and_class_docstrings() -> None:
+    """Test that both field description and class docstring are displayed."""
+
+    class Database(BaseSettings):
+        """Database configuration settings."""
+
+        host: str = Field(default="localhost", description="Database host")
+
+    class App(BaseSettings):
+        """Application settings."""
+
+        database: Database = Field(default_factory=Database, description="Database connection settings")
+
+    generator = TomlGenerator()
+    result = generator.generate(SettingsInfoModel.from_settings_model(App))
+
+    expected = """\
+# App
+# Application settings.
+
+# Database connection settings
+
+# Database
+# Database configuration settings.
+
+[database]
+# host: string
+# Database host
+# Default: "localhost"
+# host = "localhost"
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_field_and_class_docstrings_dotted() -> None:
+    """Test that both docstrings are displayed with dotted keys."""
+
+    class Database(BaseSettings):
+        """Database configuration settings."""
+
+        host: str = Field(default="localhost", description="Database host")
+
+    class App(BaseSettings):
+        """Application settings."""
+
+        database: Database = Field(default_factory=Database, description="Database connection settings")
+
+    generator = TomlGenerator(generator_config=TomlSettings(section_depth=0))
+    result = generator.generate(SettingsInfoModel.from_settings_model(App))
+
+    expected = """\
+# App
+# Application settings.
+
+# Database connection settings
+
+# Database
+# Database configuration settings.
+
+# database.host: string
+# Database host
+# Default: "localhost"
+# database.host = "localhost"
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_field_description_only() -> None:
+    """Test that field description is displayed even when headers are disabled."""
+
+    class Database(BaseSettings):
+        """Database configuration settings."""
+
+        host: str = Field(default="localhost", description="Database host")
+
+    class App(BaseSettings):
+        """Application settings."""
+
+        database: Database = Field(default_factory=Database, description="Database connection settings")
+
+    generator = TomlGenerator(generator_config=TomlSettings(show_header=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(App))
+
+    expected = """\
+# Database connection settings
+
+[database]
+# host: string
+# Database host
+# Default: "localhost"
+# host = "localhost"
+"""
+    assert result == expected

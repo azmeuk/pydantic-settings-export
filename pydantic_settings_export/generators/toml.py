@@ -231,6 +231,17 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
                 container.add(comment(line))
             container.add(nl())
 
+    def _add_description_comments(self, container: Any, description: str) -> None:
+        """Add description comments to a container."""
+        if not self.generator_config.show_description or not description:
+            return
+
+        formatted = self._format_description_comment(description)
+        if formatted:
+            for line in formatted.split("\n"):
+                container.add(comment(line))
+            container.add(nl())
+
     def _format_field_comment(self, field: FieldInfoModel, key_name: str | None = None) -> list[str]:
         """Generate comment lines for a field."""
         lines: list[str] = []
@@ -286,6 +297,9 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
     def _add_child_as_dotted_keys(self, container: Any, child: SettingsInfoModel, dotted_prefix: str) -> None:
         """Add a child settings using dotted key syntax."""
+        if child.field_description:
+            self._add_description_comments(container, child.field_description)
+
         self._add_header_comments(container, child.name, child.docs)
 
         for field in child.fields:
@@ -331,6 +345,9 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         section_path: str | None = None,
     ) -> None:
         """Add a child settings as a TOML section, including nested child settings recursively."""
+        if child.field_description:
+            self._add_description_comments(container, child.field_description)
+
         self._add_header_comments(container, child.name, child.docs)
 
         section = table()

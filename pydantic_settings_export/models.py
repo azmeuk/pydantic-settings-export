@@ -2,6 +2,7 @@ import json
 import logging
 import sys
 import warnings
+from collections.abc import Callable
 from inspect import getdoc, isclass
 from pathlib import Path
 from types import GenericAlias
@@ -315,6 +316,8 @@ class FieldInfoModel(BaseModel):
         description="True for synthetic JSON fields representing a non-env-expandable nested model. "
         "Structural generators (TOML, simple) skip these.",
     )
+    annotation: Any = None
+    default_factory: Callable[[], Any] | None = None
 
     @property
     def full_name(self) -> str:
@@ -357,7 +360,7 @@ class FieldInfoModel(BaseModel):
 
     @staticmethod
     def create_value(
-        instance: BaseSettings,
+        instance: BaseModel,
         field_name: str,
         global_settings: PSESettings | None = None,
     ) -> Any:
@@ -388,8 +391,9 @@ class FieldInfoModel(BaseModel):
         name: str,
         field: FieldInfo,
         global_settings: PSESettings | None = None,
-        instance: BaseSettings | None = None,
+        instance: BaseModel | None = None,
         *,
+        skip_factory_default: bool = False,
         env_prefix: str = "",
         is_nested: bool = False,
         case_sensitive: bool = False,
@@ -402,6 +406,8 @@ class FieldInfoModel(BaseModel):
         :param field: The field info to generate FieldInfoModel from.
         :param global_settings: The global settings.
         :param instance: Optional settings instance to extract actual values from.
+        :param skip_factory_default: When True and the field has only a default_factory
+            (no literal default), set default to None instead of calling the factory.
         :param env_prefix: Accumulated env prefix (e.g. ``APP_NESTED__``).
         :param is_nested: True when field belongs to a nested model (alias gets prefix).
         :param case_sensitive: When True, env names are not uppercased.
@@ -416,7 +422,10 @@ class FieldInfoModel(BaseModel):
         name: str = name
         # Get the type from the FIELD_TYPE_MAP if it exists
         types: list[Any] = get_type_by_annotation(annotation)
-        raw_default = cls.create_default(field, global_settings)
+        if skip_factory_default and field.default is PydanticUndefined and field.default_factory:
+            raw_default = None
+        else:
+            raw_default = cls.create_default(field, global_settings)
         is_required = raw_default is PydanticUndefined
         default: Any = None if is_required else raw_default
         raw_value = cls.create_value(instance, name, global_settings) if instance else PydanticUndefined
@@ -461,6 +470,8 @@ class FieldInfoModel(BaseModel):
             env_names=env_names,
             deprecated=deprecated,
             env_accessible=env_accessible,
+            annotation=annotation,
+            default_factory=field.default_factory,
         )
 
 
@@ -471,6 +482,7 @@ class SettingsInfoModel(BaseModel):
     docs: str = Field("", description="The documentation of the settings model.")
     env_prefix: str = Field("", description="The prefix of the environment variables.")
     field_name: str = Field("", description="The original field name (for child settings).")
+    field_description: str = Field("", description="The description of the field (for child settings).")
     fields: list[FieldInfoModel] = Field(default_factory=list, description="The fields of the settings model.")
     child_settings: list["SettingsInfoModel"] = Field(
         default_factory=list, description="The child settings of the settings model."
@@ -486,9 +498,73 @@ class SettingsInfoModel(BaseModel):
     )
 
     @classmethod
+    def _process_nested_model_field(
+        cls,
+        name: str,
+        field_info: FieldInfo,
+        annotation: type[BaseModel],
+        instance: BaseModel | None,
+        global_settings: PSESettings | None,
+        prefix: str,
+        nested_delimiter: str | None,
+        case_sensitive: bool,
+        env_accessible: bool,
+        is_nested: bool,
+        populate_by_name: bool,
+    ) -> tuple["SettingsInfoModel", FieldInfoModel | None]:
+        """Build child settings info for a nested BaseModel/BaseSettings field."""
+        child_instance = getattr(instance, name, None) if instance else None
+
+        # A BaseSettings subclass with its own env_prefix is always independently
+        # accessible via that prefix (BaseSettings.__init__ always runs its own env
+        # sources, regardless of parent's nested_delimiter or default_factory path).
+        has_own_prefix = issubclass(annotation, BaseSettings) and bool(annotation.model_config.get("env_prefix", ""))
+        env_expandable = nested_delimiter is not None or has_own_prefix
+
+        if nested_delimiter is not None:
+            # Parent-delimiter path: {prefix}{field}{delimiter}{subfield}=value
+            child_prefix = f"{prefix}{name}{nested_delimiter}"
+            child_nested_delimiter: str | None = nested_delimiter
+        elif has_own_prefix:
+            # Own-prefix path: child is a standalone BaseSettings with its own prefix.
+            # Use child's own env_prefix and its own nested_delimiter (if any).
+            child_prefix = str(annotation.model_config.get("env_prefix", ""))
+            child_nested_delimiter = annotation.model_config.get("env_nested_delimiter") or None  # type: ignore[assignment]
+        else:
+            child_prefix = ""  # no env prefix — fields will have empty env_names
+            child_nested_delimiter = None
+
+        child = cls.from_settings_model(
+            child_instance if child_instance else annotation,
+            global_settings=global_settings,
+            prefix=child_prefix,
+            nested_delimiter=child_nested_delimiter if env_expandable else None,
+            field_name=name,
+            case_sensitive=case_sensitive,
+            env_accessible=env_expandable,
+        )
+        if field_info.description:
+            child = child.model_copy(update={"field_description": field_info.description})
+        if env_expandable:
+            return child, None
+
+        json_field = FieldInfoModel.from_settings_field(
+            name,
+            field_info,
+            global_settings,
+            instance,
+            env_prefix=prefix,
+            is_nested=is_nested,
+            case_sensitive=case_sensitive,
+            populate_by_name=populate_by_name,
+            env_accessible=env_accessible,
+        )
+        return child, json_field.model_copy(update={"is_env_only": True})
+
+    @classmethod
     def from_settings_model(
         cls,
-        settings: BaseSettings | type[BaseSettings],
+        settings: BaseModel | type[BaseModel],
         global_settings: PSESettings | None = None,
         prefix: str = "",
         nested_delimiter: str | None = None,
@@ -507,9 +583,9 @@ class SettingsInfoModel(BaseModel):
         :param env_accessible: Propagated to child fields; False → env_names=[]. Used by env generators.
         :return: Instance of SettingsInfoModel.
         """
-        is_instance = isinstance(settings, BaseSettings) and not isclass(settings)
-        instance: BaseSettings | None = settings if is_instance else None
-        settings_class: type[BaseSettings] = settings.__class__ if is_instance else settings  # type: ignore[assignment]
+        is_instance = isinstance(settings, BaseModel) and not isclass(settings)
+        instance: BaseModel | None = settings if is_instance else None  # type: ignore[assignment]
+        settings_class: type[BaseModel] = settings.__class__ if is_instance else settings  # type: ignore[assignment]
 
         conf = settings.model_config
         with warnings.catch_warnings():
@@ -541,56 +617,23 @@ class SettingsInfoModel(BaseModel):
             # like TOML/simple always expand). For env generators (dotenv/markdown), only
             # env_accessible=True children are expanded; False ones appear as JSON fields.
             if isclass(annotation) and issubclass(annotation, (BaseModel, BaseSettings)):
-                child_instance = getattr(instance, name, None) if instance else None
-
-                # A BaseSettings subclass with its own env_prefix is always independently
-                # accessible via that prefix (BaseSettings.__init__ always runs its own env
-                # sources, regardless of parent's nested_delimiter or default_factory path).
-                has_own_prefix = issubclass(annotation, BaseSettings) and bool(
-                    annotation.model_config.get("env_prefix", "")
-                )
-                env_expandable = nested_delimiter is not None or has_own_prefix
-
-                if nested_delimiter is not None:
-                    # Parent-delimiter path: {prefix}{field}{delimiter}{subfield}=value
-                    child_prefix = f"{prefix}{name}{nested_delimiter}"
-                    child_nested_delimiter: str | None = nested_delimiter
-                elif has_own_prefix:
-                    # Own-prefix path: child is a standalone BaseSettings with its own prefix.
-                    # Use child's own env_prefix and its own nested_delimiter (if any).
-                    child_prefix = str(annotation.model_config.get("env_prefix", ""))
-                    child_nested_delimiter = annotation.model_config.get("env_nested_delimiter") or None  # type: ignore[assignment]
-                else:
-                    child_prefix = ""  # no env prefix — fields will have empty env_names
-                    child_nested_delimiter = None
-
-                child_settings.append(
-                    cls.from_settings_model(
-                        child_instance if child_instance else cast(type[BaseSettings], annotation),
-                        global_settings=global_settings,
-                        prefix=child_prefix,
-                        nested_delimiter=child_nested_delimiter if env_expandable else None,
-                        field_name=name,
-                        case_sensitive=case_sensitive,
-                        env_accessible=env_expandable,
-                    )
-                )
-                if env_expandable:
-                    continue  # env-accessible: only in child_settings
-                # Not env-accessible: also add a synthetic JSON field for env generators.
-                # Structural generators (TOML, simple) will skip is_env_only=True fields.
-                json_field = FieldInfoModel.from_settings_field(
-                    name,
-                    field_info,
-                    global_settings,
-                    instance,
-                    env_prefix=prefix,
-                    is_nested=is_nested,
+                child, json_field = cls._process_nested_model_field(
+                    name=name,
+                    field_info=field_info,
+                    annotation=annotation,
+                    instance=instance,
+                    global_settings=global_settings,
+                    prefix=prefix,
+                    nested_delimiter=nested_delimiter,
                     case_sensitive=case_sensitive,
-                    populate_by_name=populate_by_name,
                     env_accessible=env_accessible,
+                    is_nested=is_nested,
+                    populate_by_name=populate_by_name,
                 )
-                fields.append(json_field.model_copy(update={"is_env_only": True}))
+                child_settings.append(child)
+                if json_field is None:
+                    continue  # env-accessible: only in child_settings
+                fields.append(json_field)
                 continue  # always explicit, never fall through
 
             fields.append(
@@ -599,6 +642,7 @@ class SettingsInfoModel(BaseModel):
                     field_info,
                     global_settings,
                     instance,
+                    skip_factory_default=is_instance,
                     env_prefix=prefix,
                     is_nested=is_nested,
                     case_sensitive=case_sensitive,

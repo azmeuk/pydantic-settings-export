@@ -42,6 +42,8 @@
 # Default: null
 # env_file =
 
+# The relative directory settings.
+
 # Relative Directory Settings
 # Settings for the relative directory.
 
