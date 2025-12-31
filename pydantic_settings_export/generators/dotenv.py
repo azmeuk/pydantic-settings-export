@@ -108,6 +108,10 @@ class DotEnvGenerator(AbstractGenerator[DotEnvSettings]):
         if field.is_required and not is_required:
             return None
 
+        # Skip optional fields if we're only including required ones
+        if not field.is_required and not is_optional:
+            return None
+
         # Format optional fields with a comment prefix
         field_string = f"{field_name}="
         if not field.is_required and is_optional:
