@@ -66,7 +66,11 @@ class DotEnvSettings(BaseGeneratorSettings):
     @model_validator(mode="after")
     def validate_paths(self) -> Self:
         """Validate the paths."""
-        if self.name:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _name = self.name
+
+        if _name:
             warnings.warn(
                 "The `name` attribute is deprecated and will be removed in a future version. "
                 "Please migrate to using `paths: list[Path]` instead. "
@@ -74,7 +78,7 @@ class DotEnvSettings(BaseGeneratorSettings):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            self.paths = [self.name]
+            self.paths = [_name]
         return self
 
 

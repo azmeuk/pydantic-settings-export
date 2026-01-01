@@ -48,8 +48,8 @@ class MarkdownSettings(BaseGeneratorSettings):
 
     model_config = ConfigDict(title="Generator: Markdown Configuration File Settings")
 
-    name: str = Field(
-        "Configuration.md",
+    name: str | None = Field(
+        None,
         description="The name of the configuration file.",
         deprecated=True,
     )
@@ -114,7 +114,11 @@ class MarkdownSettings(BaseGeneratorSettings):
     @model_validator(mode="after")
     def validate_paths(self) -> Self:
         """Validate the paths."""
-        if self.save_dirs and self.name:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _name = self.name
+            _save_dirs = self.save_dirs
+        if _save_dirs and _name:
             warnings.warn(
                 (
                     "The `save_dirs` and `name` attributes are deprecated and will be removed in the future. "
@@ -123,7 +127,7 @@ class MarkdownSettings(BaseGeneratorSettings):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            self.paths = [path / self.name for path in self.save_dirs]
+            self.paths = [path / _name for path in _save_dirs]
         self.paths = [p.absolute().resolve() for p in self.paths]
         return self
 
