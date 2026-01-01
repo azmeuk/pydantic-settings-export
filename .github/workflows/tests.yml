@@ -28,7 +28,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install the project
-        run: uv sync --all-extras --dev --frozen --no-editable
+        run: uv sync --all-extras --dev --group tests --frozen --no-editable
 
       - name: Run tests
         run: uv run --frozen --no-editable pytest --cov --cov-report=term-missing
