@@ -66,7 +66,11 @@ class DotEnvSettings(BaseGeneratorSettings):
     @model_validator(mode="after")
     def validate_paths(self) -> Self:
         """Validate the paths."""
-        if self.name:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            _name = self.name
+
+        if _name:
             warnings.warn(
                 "The `name` attribute is deprecated and will be removed in a future version. "
                 "Please migrate to using `paths: list[Path]` instead. "
@@ -74,7 +78,7 @@ class DotEnvSettings(BaseGeneratorSettings):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            self.paths = [self.name]
+            self.paths = [_name]
         return self
 
 
@@ -106,6 +110,10 @@ class DotEnvGenerator(AbstractGenerator[DotEnvSettings]):
 
         # Skip required fields if we're only including optional ones
         if field.is_required and not is_required:
+            return None
+
+        # Skip optional fields if we're only including required ones
+        if not field.is_required and not is_optional:
             return None
 
         # Format optional fields with a comment prefix

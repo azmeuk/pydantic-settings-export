@@ -1,0 +1,7 @@
+exclude = ["pylock.toml"]
+
+[formatting]
+align_comments = false
+column_width = 120
+indent_string = "    " # 4 spaces
+array_auto_collapse = false

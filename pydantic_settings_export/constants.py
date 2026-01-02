@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import NoneType
 from typing import Annotated
 
 from pydantic import BeforeValidator, SecretStr
@@ -19,4 +20,5 @@ FIELD_TYPE_MAP = {
     list: "array",
     dict: "object",
     None: "null",
+    NoneType: "null",
 }

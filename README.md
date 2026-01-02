@@ -129,7 +129,7 @@ The CLI provides a powerful interface for generating documentation:
 pydantic-settings-export your_app.settings:Settings
 
 # Multiple generators
-pydantic-settings-export --generator markdown --generator dotenv your_app.settings:Settings
+pydantic-settings-export --generator markdown --generator dotenv -- your_app.settings:Settings
 
 # Help with all options and sub-commands
 pydantic-settings-export --help

@@ -121,7 +121,7 @@ def test_toml_generator_with_none_and_comment_defaults_false() -> None:
     expected = """\
 # Settings
 
-# nullable: string | NoneType
+# nullable: string | null
 # Default: null
 # nullable =
 
