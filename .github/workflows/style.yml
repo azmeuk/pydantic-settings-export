@@ -1,0 +1,34 @@
+name: Style
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.10"
+
+      - name: Install the project
+        run: uv sync --all-extras --dev --frozen --no-editable
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-3|${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: uv run --frozen --no-editable pre-commit run --all-files --show-diff-on-failure --color=always

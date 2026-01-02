@@ -1,6 +1,7 @@
 # https://pre-commit.com/
 
-default_stages: [ pre-commit, pre-push ]
+default_stages: [ pre-commit ]
+default_install_hook_types: [ pre-commit ]
 default_language_version:
   python: python3.10
 
@@ -21,29 +22,52 @@ repos:
         exclude: .md$
       - id: check-added-large-files
       - id: detect-private-key
+      - id: name-tests-test
+        args:
+          - --pytest-test-first
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.36.0
+    hooks:
+      - id: check-github-workflows
+      - id: check-jsonschema
+        name: "Check .pre-commit-config.yml"
+        files: ^\.pre-commit-config\.ya?ml$
+        types: [ yaml ]
+        args: [ "--schemafile", "https://json.schemastore.org/pre-commit-config" ]
+      - id: check-jsonschema
+        name: "Check .pre-commit-hooks.yml"
+        files: ^\.pre-commit-hooks\.ya?ml$
+        types: [ yaml ]
+        args: [ "--schemafile", "https://json.schemastore.org/pre-commit-hooks" ]
+
+  - repo: https://github.com/ComPWA/taplo-pre-commit # TOML formatter
+    rev: v0.9.3
+    hooks:
+      - id: taplo-format
 
   - repo: https://github.com/bwhmather/ssort
-    rev: 0.15.0
+    rev: 0.16.0
     hooks:
       - id: ssort
         entry: ssort
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.9
+    rev: v0.14.10
     hooks:
       - id: ruff-check
         args: [ --fix ]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.17.1
+    rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies:
           - types-pyyaml
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.8.12
+    rev: 0.9.21
     hooks:
       - id: uv-lock
       - id: uv-export
@@ -59,5 +83,6 @@ repos:
         language: python
         files: \.py$
         pass_filenames: false
+        verbose: true
         additional_dependencies:
-          - '.[email,regions]'
+          - '.[email,regions,toml]'

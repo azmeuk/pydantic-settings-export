@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, TomlConfigSettingsSource
 from pydantic_settings.sources import PathType, PydanticBaseSettingsSource, PyprojectTomlConfigSettingsSource
 
 __all__ = ("TomlSettings",)
@@ -28,24 +28,28 @@ class TomlSettings(BaseSettings):
         :param file_secret_settings: The file secret settings source.
         :return: The customised sources.
         """
-        toml_file: PathType | None = settings_cls.model_config.get("toml_file", None)
-        base_settings = (init_settings, env_settings, dotenv_settings, file_secret_settings)
+        conf = settings_cls.model_config
+        toml_file: PathType | None = conf.get("toml_file", None)
+
         if not toml_file:
-            settings_cls.model_config.pop("toml_file", None)
-            settings_cls.model_config.pop("pyproject_toml_table_header", None)
-            settings_cls.model_config.pop("pyproject_toml_depth", None)
-            return base_settings
+            conf.pop("toml_file", None)
+            conf.pop("pyproject_toml_table_header", None)
+            conf.pop("pyproject_toml_depth", None)
+            return init_settings, env_settings, dotenv_settings, file_secret_settings
 
         if isinstance(toml_file, Sequence):
             toml_file = toml_file[0]
 
-        if Path(toml_file).is_file():
-            return (
-                init_settings,
-                PyprojectTomlConfigSettingsSource(settings_cls, toml_file=Path(toml_file)),
-                env_settings,
-                dotenv_settings,
-                file_secret_settings,
-            )
+        toml_settings_source: type[TomlConfigSettingsSource] = TomlConfigSettingsSource
 
-        return base_settings
+        # Check if the user wants to use pyproject.toml
+        if conf.get("pyproject_toml_table_header") or conf.get("pyproject_toml_depth"):
+            toml_settings_source = PyprojectTomlConfigSettingsSource
+
+        return (
+            init_settings,
+            toml_settings_source(settings_cls, toml_file=Path(toml_file)),
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        )

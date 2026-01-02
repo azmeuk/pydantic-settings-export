@@ -1,11 +1,12 @@
 import json
 import sys
+import warnings
 from inspect import getdoc, isclass
 from pathlib import Path
 from types import GenericAlias
 from typing import TYPE_CHECKING, Any, ForwardRef, Literal, TypeVar, Union, cast, get_args, get_origin
 
-from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field, PydanticDeprecationWarning, TypeAdapter
 from pydantic.fields import FieldInfo
 from pydantic_core import PydanticSerializationError, PydanticUndefined
 from pydantic_settings import BaseSettings
@@ -282,7 +283,9 @@ class SettingsInfoModel(BaseModel):
         :return: Instance of SettingsInfoModel.
         """
         conf = settings.model_config
-        fields_info = settings.model_fields
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=PydanticDeprecationWarning)
+            fields_info = settings.model_fields
 
         # If the settings are a BaseSettings, then we can get the prefix and nested delimiter from the model config
         if isinstance(settings, BaseSettings) or (isclass(settings) and issubclass(settings, BaseSettings)):

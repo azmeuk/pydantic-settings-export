@@ -3,9 +3,8 @@ name = "pydantic-settings-export"
 dynamic = ["version"]
 description = "Export your Pydantic settings to documentation with ease!"
 readme = "README.md"
-authors = [
-    { name = "Jag_k", email = "30597878+jag-k@users.noreply.github.com" }
-]
+authors = [{ name = "Jag_k", email = "30597878+jag-k@users.noreply.github.com" }]
+maintainers = [{ name = "Jag_k", email = "30597878+jag-k@users.noreply.github.com" }]
 requires-python = ">=3.10"
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -46,6 +45,11 @@ dependencies = [
 pydantic-settings-export = "pydantic_settings_export.cli:main"
 
 [project.optional-dependencies]
+all = [
+    "email-validator>=2.2.0",
+    "text-region-parser>=0.1.1",
+    "tomlkit>=0.12.0",
+]
 email = [
     "email-validator>=2.2.0",
 ]
@@ -124,7 +128,6 @@ ignore = [
 ]
 
 
-
 # https://docs.astral.sh/ruff/settings/#extend-per-file-ignores
 [tool.ruff.lint.extend-per-file-ignores]
 '__init__.py' = [
@@ -135,6 +138,8 @@ ignore = [
 'tests/**/*.py' = [
     'D', # Docstring Errors
     'S101', # Use of assert detected
+    'UP',
+    'E501',
 ]
 
 # https://docs.astral.sh/ruff/settings/#lintpydocstyle
@@ -174,10 +179,10 @@ exclude = [
     '^setup\.py$',
     '^tmp\.py$',
     '^venv/',
-    '^test+\.py$',
-    '^conftest\.py$',
+    'test.+\.py$',
+    'conftest\.py$',
     '^tests/',
-    '^prompt\.py$'
+    '^prompt\.py$',
 ]
 disable_error_code = [
     "call-arg",
@@ -185,8 +190,19 @@ disable_error_code = [
 
 [[tool.mypy.overrides]]
 module = "pydantic_settings_export.settings"
-disable_error_code = [
-    "arg-type",
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = ["arg-type"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "@pytest.mark.skip",
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING",
+    "except ImportError",
 ]
 
 # https://github.com/jag-k/pydantic-settings-export
@@ -197,6 +213,7 @@ default_settings = [
 ]
 env_file = ".env"
 
+# region: Dotenv
 [[tool.pydantic_settings_export.generators.dotenv]]
 paths = [
     "examples/.env.example",
@@ -210,6 +227,20 @@ mode = "only-optional"
 split_by_group = false
 add_examples = false
 
+# Note: This example gives an empty file for this specific configuration, 'cause we haven't any required fields.
+#  If you have required fields, you can use the `"only-required"` mode.
+
+#[[tool.pydantic_settings_export.generators.dotenv]]
+#paths = [
+#    "examples/.env.only_required_mode.example",
+#]
+#mode = "only-required"
+#split_by_group = false
+#add_examples = false
+
+# endregion
+
+# region: Markdown
 [[tool.pydantic_settings_export.generators.markdown]]
 paths = [
     "examples/Configuration.md",
@@ -230,7 +261,9 @@ region = "config"
 paths = [
     "examples/InjectedConfiguration.md",
 ]
+# endregion
 
+# region: TOML
 [[tool.pydantic_settings_export.generators.toml]]
 paths = [
     "examples/config.example.toml",
@@ -242,14 +275,7 @@ mode = "all"
 paths = [
     "examples/pyproject.example.toml",
 ]
-prefix="tool.pydantic_settings_export"
+prefix = "tool.pydantic_settings_export"
 comment_defaults = true
 mode = "all"
-
-[tool.coverage.report]
-exclude_lines = [
-    "@pytest.mark.skip",
-    "pragma: no cover",
-    "raise NotImplementedError",
-    "except ImportError",
-]
+# endregion
