@@ -8,28 +8,6 @@ from pydantic_settings_export import SettingsInfoModel, SimpleGenerator
 # =============================================================================
 
 
-def test_simple_basic_output(simple_settings: type[BaseSettings]) -> None:
-    """Test basic simple text output."""
-    generator = SimpleGenerator()
-    result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
-
-    assert result == (
-        """\
-Settings
-========
-
-Test settings.
-
-`field`: ['string']
--------------------
-
-Field description
-
-Default: "value"
-"""
-    )
-
-
 def test_simple_with_env_prefix() -> None:
     """Test simple output shows env_prefix."""
 
@@ -40,9 +18,7 @@ def test_simple_with_env_prefix() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert (
-        result
-        == """\
+    expected = """\
 Settings
 ========
 
@@ -55,7 +31,7 @@ A field
 
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 def test_simple_without_env_prefix(simple_settings: type[BaseSettings]) -> None:
@@ -76,8 +52,7 @@ def test_simple_with_default(simple_settings: type[BaseSettings]) -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -90,7 +65,7 @@ Field description
 
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 def test_simple_without_default() -> None:
@@ -115,8 +90,7 @@ def test_simple_with_deprecated() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -124,7 +98,8 @@ Settings
 -----------------------------------
 Default: "value"
 """
-    )
+
+    assert result == expected
 
 
 def test_simple_with_examples() -> None:
@@ -136,8 +111,7 @@ def test_simple_with_examples() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -146,7 +120,7 @@ Settings
 Default: "default"
 Examples: "ex1", "ex2"
 """
-    )
+    assert result == expected
 
 
 def test_simple_without_examples() -> None:
@@ -167,8 +141,7 @@ def test_simple_with_description(simple_settings: type[BaseSettings]) -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -181,7 +154,7 @@ Field description
 
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 def test_simple_without_description() -> None:
@@ -194,8 +167,7 @@ def test_simple_without_description() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Field should still be present
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -203,7 +175,7 @@ Settings
 -------------------
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 # =============================================================================
@@ -223,8 +195,7 @@ def test_simple_with_various_types() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -244,7 +215,7 @@ Default: true
 -----------------------
 Default: []
 """
-    )
+    assert result == expected
 
 
 # =============================================================================
@@ -261,8 +232,7 @@ def test_simple_with_alias() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -270,7 +240,7 @@ Settings
 ---------------------------
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 # =============================================================================
@@ -283,8 +253,7 @@ def test_simple_with_docstring(simple_settings: type[BaseSettings]) -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -297,7 +266,7 @@ Field description
 
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 def test_simple_without_docstring() -> None:
@@ -310,8 +279,7 @@ def test_simple_without_docstring() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Should still have a header
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -319,7 +287,7 @@ Settings
 -------------------
 Default: "value"
 """
-    )
+    assert result == expected
 
 
 # =============================================================================
@@ -373,8 +341,7 @@ def test_simple_multiple_settings() -> None:
         SettingsInfoModel.from_settings_model(Settings2),
     )
 
-    assert result == (
-        """\
+    expected = """\
 Settings1
 =========
 
@@ -393,7 +360,7 @@ Second settings.
 --------------------
 Default: "value2"
 """
-    )
+    assert result == expected
 
 
 def test_simple_multiple_fields() -> None:
@@ -407,8 +374,7 @@ def test_simple_multiple_fields() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert result == (
-        """\
+    expected = """\
 Settings
 ========
 
@@ -433,4 +399,4 @@ Third field
 
 Default: true
 """
-    )
+    assert result == expected
