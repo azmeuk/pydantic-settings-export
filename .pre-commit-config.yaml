@@ -26,6 +26,20 @@ repos:
         args:
           - --pytest-test-first
 
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.36.0
+    hooks:
+      - id: check-github-workflows
+      - id: check-jsonschema
+        name: "Check .pre-commit-config.yml"
+        files: ^\.pre-commit-config\.ya?ml$
+        types: [ yaml ]
+        args: [ "--schemafile", "https://json.schemastore.org/pre-commit-config" ]
+      - id: check-jsonschema
+        name: "Check .pre-commit-hooks.yml"
+        files: ^\.pre-commit-hooks\.ya?ml$
+        types: [ yaml ]
+        args: [ "--schemafile", "https://json.schemastore.org/pre-commit-hooks" ]
 
   - repo: https://github.com/ComPWA/taplo-pre-commit # TOML formatter
     rev: v0.9.3
@@ -60,6 +74,7 @@ repos:
         args: [ "--output-file=pylock.toml", "-q" ]
       - id: uv-sync
         args: [ "--all-extras" ]
+
   - repo: local
     hooks:
       - id: pydantic-settings-export
@@ -68,5 +83,6 @@ repos:
         language: python
         files: \.py$
         pass_filenames: false
+        verbose: true
         additional_dependencies:
           - '.[email,regions,toml]'

@@ -196,6 +196,15 @@ disable_error_code = ["arg-type"]
 module = "tests.*"
 disable_error_code = ["arg-type"]
 
+[tool.coverage.report]
+exclude_lines = [
+    "@pytest.mark.skip",
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING",
+    "except ImportError",
+]
+
 # https://github.com/jag-k/pydantic-settings-export
 [tool.pydantic_settings_export]
 project_dir = "."
@@ -204,6 +213,7 @@ default_settings = [
 ]
 env_file = ".env"
 
+# region: Dotenv
 [[tool.pydantic_settings_export.generators.dotenv]]
 paths = [
     "examples/.env.example",
@@ -217,6 +227,20 @@ mode = "only-optional"
 split_by_group = false
 add_examples = false
 
+# Note: This example gives an empty file for this specific configuration, 'cause we haven't any required fields.
+#  If you have required fields, you can use the `"only-required"` mode.
+
+#[[tool.pydantic_settings_export.generators.dotenv]]
+#paths = [
+#    "examples/.env.only_required_mode.example",
+#]
+#mode = "only-required"
+#split_by_group = false
+#add_examples = false
+
+# endregion
+
+# region: Markdown
 [[tool.pydantic_settings_export.generators.markdown]]
 paths = [
     "examples/Configuration.md",
@@ -237,7 +261,9 @@ region = "config"
 paths = [
     "examples/InjectedConfiguration.md",
 ]
+# endregion
 
+# region: TOML
 [[tool.pydantic_settings_export.generators.toml]]
 paths = [
     "examples/config.example.toml",
@@ -252,12 +278,4 @@ paths = [
 prefix = "tool.pydantic_settings_export"
 comment_defaults = true
 mode = "all"
-
-[tool.coverage.report]
-exclude_lines = [
-    "@pytest.mark.skip",
-    "pragma: no cover",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING",
-    "except ImportError",
-]
+# endregion

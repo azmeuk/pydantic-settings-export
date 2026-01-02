@@ -164,7 +164,7 @@ class DotEnvGenerator(AbstractGenerator[DotEnvSettings]):
 
         if not has_content:
             warnings.warn(
-                f"# No environment variables found for {settings_info.name} in "
+                f"No environment variables found for {settings_info.name} in "
                 f"mode={self.generator_config.mode!r} "
                 f"(looking for {'optional' if is_optional else 'required'} variables)",
                 stacklevel=2,
