@@ -1,6 +1,6 @@
 import warnings
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import Field
@@ -199,18 +199,37 @@ def test_exporter_continues_after_generator_failure(simple_settings: type[BaseSe
 # =============================================================================
 
 
-def test_exporter_handles_generator_init_failure() -> None:
+def test_exporter_handles_generator_init_failure(pse_settings: PSESettings) -> None:
     """Test Exporter handles generator initialization failures."""
     # This test verifies that if a generator fails to initialize,
     # the Exporter still works with other generators
 
-    with warnings.catch_warnings(record=True):
+    # Create a mock generator class that fails during __init__
+    mock_generator_class = MagicMock(side_effect=RuntimeError("Init failed"))
+    mock_generator_class.__name__ = "FailingGenerator"
+
+    # Patch ALL_GENERATORS to include both a working and failing generator
+    with (
+        patch.object(
+            AbstractGenerator,
+            "ALL_GENERATORS",
+            [SimpleGenerator, mock_generator_class],
+        ),
+        warnings.catch_warnings(record=True) as w,
+    ):
         warnings.simplefilter("always")
-        # Default initialization should work even if some generators fail
-        exporter = Exporter()
+        # Should handle init failure and continue with other generators
+        exporter = Exporter(settings=pse_settings)
 
         # Exporter should still be created
         assert exporter is not None
+        # Should have exactly one working generator (SimpleGenerator)
+        assert len(exporter.generators) == 1
+        assert isinstance(exporter.generators[0], SimpleGenerator)
+        # Should have warning about the failed generator
+        assert len(w) == 1
+        assert "FailingGenerator" in str(w[0].message)
+        assert "Init failed" in str(w[0].message)
 
 
 # =============================================================================

@@ -236,7 +236,7 @@ def test_missing_settings_error_single_field() -> None:
 
     error = MissingSettingsError(missing, "Settings")
 
-    assert "1 missing settings" in str(error)
+    assert "1 missing setting" in str(error)
     assert "field" in str(error)
 
 
