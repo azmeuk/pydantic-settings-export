@@ -1,7 +1,6 @@
 """Tests for TOML generator."""
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import Field
@@ -74,7 +73,7 @@ def full_settings() -> type[BaseSettings]:
     return App
 
 
-def test_toml_generator_with_comment_defaults(simple_settings: Any) -> None:
+def test_toml_generator_with_comment_defaults(simple_settings: type[BaseSettings]) -> None:
     """Test TOML generation with comment_defaults option."""
     generator = TomlGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -91,7 +90,7 @@ def test_toml_generator_with_comment_defaults(simple_settings: Any) -> None:
     assert result == expected
 
 
-def test_toml_generator_without_comment_defaults(simple_settings: Any) -> None:
+def test_toml_generator_without_comment_defaults(simple_settings: type[BaseSettings]) -> None:
     """Test TOML generation without commenting defaults."""
     generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -182,7 +181,7 @@ def test_toml_generator_with_description_transformer() -> None:
     assert result == expected
 
 
-def test_toml_generator_without_formatters(simple_settings: Any) -> None:
+def test_toml_generator_without_formatters(simple_settings: type[BaseSettings]) -> None:
     """Test TOML generation without any formatters."""
     generator = TomlGenerator(
         generator_config=TomlSettings(
@@ -200,7 +199,7 @@ def test_toml_generator_without_formatters(simple_settings: Any) -> None:
     assert result == expected
 
 
-def test_toml_generator_mode_only_optional(mixed_settings: Any) -> None:
+def test_toml_generator_mode_only_optional(mixed_settings: type[BaseSettings]) -> None:
     """Test only-optional mode filters out required fields."""
     generator = TomlGenerator(generator_config=TomlSettings(mode="only-optional"))
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
@@ -217,7 +216,7 @@ def test_toml_generator_mode_only_optional(mixed_settings: Any) -> None:
     assert result == expected
 
 
-def test_toml_generator_mode_only_required(mixed_settings: Any) -> None:
+def test_toml_generator_mode_only_required(mixed_settings: type[BaseSettings]) -> None:
     """Test only-required mode filters out optional fields."""
     generator = TomlGenerator(generator_config=TomlSettings(mode="only-required"))
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
@@ -233,7 +232,7 @@ def test_toml_generator_mode_only_required(mixed_settings: Any) -> None:
     assert result == expected
 
 
-def test_toml_generator_mode_filter_in_nested_sections(nested_settings: Any) -> None:
+def test_toml_generator_mode_filter_in_nested_sections(nested_settings: type[BaseSettings]) -> None:
     """Test mode filtering works in nested settings with sections."""
     generator = TomlGenerator(generator_config=TomlSettings(mode="only-required"))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -253,7 +252,7 @@ def test_toml_generator_mode_filter_in_nested_sections(nested_settings: Any) -> 
     assert result == expected
 
 
-def test_toml_generator_with_dotted_keys(nested_settings: Any) -> None:
+def test_toml_generator_with_dotted_keys(nested_settings: type[BaseSettings]) -> None:
     """Test section_depth=0 generates dotted keys instead of sections."""
     generator = TomlGenerator(generator_config=TomlSettings(section_depth=0))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -383,7 +382,7 @@ path = "/tmp/file.txt"
     assert result == expected
 
 
-def test_toml_generator_with_nested_union_types(full_settings: Any) -> None:
+def test_toml_generator_with_nested_union_types(full_settings: type[BaseSettings]) -> None:
     """Test nested settings with Union types are recognized as child settings."""
     generator = TomlGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(full_settings))
@@ -422,7 +421,7 @@ def test_toml_generator_with_nested_union_types(full_settings: Any) -> None:
     assert result == expected
 
 
-def test_toml_generator_dotted_keys_without_comment_defaults(nested_settings: Any) -> None:
+def test_toml_generator_dotted_keys_without_comment_defaults(nested_settings: type[BaseSettings]) -> None:
     """Test dotted keys with comment_defaults=False to cover uncommented field path."""
     generator = TomlGenerator(generator_config=TomlSettings(section_depth=0, comment_defaults=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -446,7 +445,7 @@ database.host = "localhost"
     assert result == expected
 
 
-def test_toml_generator_dotted_keys_with_mode_filter(nested_settings: Any) -> None:
+def test_toml_generator_dotted_keys_with_mode_filter(nested_settings: type[BaseSettings]) -> None:
     """Test dotted keys with mode filtering to cover continue path in _add_child_as_dotted_keys."""
     generator = TomlGenerator(generator_config=TomlSettings(section_depth=0, mode="only-required"))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -608,7 +607,7 @@ value = "deep"
     assert result == expected
 
 
-def test_toml_generator_with_prefix(simple_settings: Any) -> None:
+def test_toml_generator_with_prefix(simple_settings: type[BaseSettings]) -> None:
     """Test TOML generation with prefix option."""
     generator = TomlGenerator(generator_config=TomlSettings(prefix="tool.myapp"))
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))

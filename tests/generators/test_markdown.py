@@ -1,5 +1,3 @@
-from typing import Any
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,7 +9,7 @@ from pydantic_settings_export.generators.markdown import MarkdownSettings
 # =============================================================================
 
 
-def test_markdown_simple_table(simple_settings: Any) -> None:
+def test_markdown_simple_table(simple_settings: type[BaseSettings]) -> None:
     """Test Markdown generation with simple settings."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix=""))
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -23,7 +21,7 @@ def test_markdown_simple_table(simple_settings: Any) -> None:
     assert '`"value"`' in result
 
 
-def test_markdown_with_required_field(mixed_settings: Any) -> None:
+def test_markdown_with_required_field(mixed_settings: type[BaseSettings]) -> None:
     """Test Markdown generation with required fields."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix=""))
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
@@ -33,7 +31,7 @@ def test_markdown_with_required_field(mixed_settings: Any) -> None:
     assert "Optional field" in result
 
 
-def test_markdown_with_nested_settings(nested_settings: Any) -> None:
+def test_markdown_with_nested_settings(nested_settings: type[BaseSettings]) -> None:
     """Test Markdown generation with nested settings creates proper headers."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix=""))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -66,7 +64,7 @@ def test_markdown_with_env_prefix() -> None:
 # =============================================================================
 
 
-def test_markdown_column_visibility_name_only(simple_settings: Any) -> None:
+def test_markdown_column_visibility_name_only(simple_settings: type[BaseSettings]) -> None:
     """Test showing only the Name column."""
     from pydantic_settings_export.generators.markdown import TableHeadersEnum
 
@@ -84,7 +82,7 @@ def test_markdown_column_visibility_name_only(simple_settings: Any) -> None:
     assert "| Description" not in result
 
 
-def test_markdown_column_visibility_custom_order(simple_settings: Any) -> None:
+def test_markdown_column_visibility_custom_order(simple_settings: type[BaseSettings]) -> None:
     """Test custom column order."""
     from pydantic_settings_export.generators.markdown import TableHeadersEnum
 
@@ -128,7 +126,7 @@ def test_markdown_deprecated_field() -> None:
 # =============================================================================
 
 
-def test_markdown_table_only_true(nested_settings: Any) -> None:
+def test_markdown_table_only_true(nested_settings: type[BaseSettings]) -> None:
     """Test table_only=True generates only table without headers."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix="", table_only=True))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -141,7 +139,7 @@ def test_markdown_table_only_true(nested_settings: Any) -> None:
     assert "`DATABASE_PORT`" in result
 
 
-def test_markdown_table_only_with_header(nested_settings: Any) -> None:
+def test_markdown_table_only_with_header(nested_settings: type[BaseSettings]) -> None:
     """Test table_only='with-header' generates table with top-level header."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix="", table_only="with-header"))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
@@ -156,7 +154,7 @@ def test_markdown_table_only_with_header(nested_settings: Any) -> None:
 # =============================================================================
 
 
-def test_markdown_with_file_prefix(simple_settings: Any) -> None:
+def test_markdown_with_file_prefix(simple_settings: type[BaseSettings]) -> None:
     """Test Markdown generation with custom file prefix."""
     custom_prefix = "# My Configuration\n\nCustom prefix text.\n\n"
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix=custom_prefix))
@@ -166,7 +164,7 @@ def test_markdown_with_file_prefix(simple_settings: Any) -> None:
     assert "Custom prefix text." in result
 
 
-def test_markdown_default_file_prefix(simple_settings: Any) -> None:
+def test_markdown_default_file_prefix(simple_settings: type[BaseSettings]) -> None:
     """Test Markdown generation with default file prefix."""
     generator = MarkdownGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -180,7 +178,7 @@ def test_markdown_default_file_prefix(simple_settings: Any) -> None:
 # =============================================================================
 
 
-def test_markdown_to_upper_case_true(simple_settings: Any) -> None:
+def test_markdown_to_upper_case_true(simple_settings: type[BaseSettings]) -> None:
     """Test field names are converted to upper case by default."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix="", to_upper_case=True))
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -189,7 +187,7 @@ def test_markdown_to_upper_case_true(simple_settings: Any) -> None:
     assert "`field`" not in result
 
 
-def test_markdown_to_upper_case_false(simple_settings: Any) -> None:
+def test_markdown_to_upper_case_false(simple_settings: type[BaseSettings]) -> None:
     """Test field names are not converted when to_upper_case=False."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix="", to_upper_case=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -256,15 +254,13 @@ def test_markdown_with_union_types() -> None:
 # =============================================================================
 
 
-def test_markdown_full_settings(full_settings: Any) -> None:
+def test_markdown_full_settings(full_settings: type[BaseSettings]) -> None:
     """Test comprehensive Markdown generation with all features."""
     generator = MarkdownGenerator(generator_config=MarkdownSettings(file_prefix=""))
     result = generator.generate(SettingsInfoModel.from_settings_model(full_settings))
 
     # Check main settings
-    assert (
-        result
-        == """\
+    expected = """\
 ## Settings
 
 | Name         | Type                                                              | Default                                                       | Description           | Example                                                       |
@@ -304,7 +300,7 @@ OpenRouter models settings.
 | `API__HOST` | `string`  | `"0.0.0.0"` | API host    | `"0.0.0.0"` |
 | `API__PORT` | `integer` | `8000`      | API port    | `8000`      |
 """
-    )
+    assert result == expected
 
 
 def test_markdown_multiple_settings() -> None:

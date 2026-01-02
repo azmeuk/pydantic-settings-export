@@ -1,5 +1,3 @@
-from typing import Any
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,20 +8,26 @@ from pydantic_settings_export import SettingsInfoModel, SimpleGenerator
 # =============================================================================
 
 
-def test_simple_basic_output(simple_settings: Any) -> None:
+def test_simple_basic_output(simple_settings: type[BaseSettings]) -> None:
     """Test basic simple text output."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    # Check header
-    assert "Settings" in result
-    assert "========" in result  # Header underline
-    # Check docstring
-    assert "Test settings." in result
-    # Check field
-    assert "`field`" in result
-    assert "string" in result
-    assert "Field description" in result
+    assert result == (
+        """\
+Settings
+========
+
+Test settings.
+
+`field`: ['string']
+-------------------
+
+Field description
+
+Default: "value"
+"""
+    )
 
 
 def test_simple_with_env_prefix() -> None:
@@ -36,10 +40,25 @@ def test_simple_with_env_prefix() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "Environment Prefix: APP_" in result
+    assert (
+        result
+        == """\
+Settings
+========
+
+Environment Prefix: APP_
+
+`field`: ['string']
+-------------------
+
+A field
+
+Default: "value"
+"""
+    )
 
 
-def test_simple_without_env_prefix(simple_settings: Any) -> None:
+def test_simple_without_env_prefix(simple_settings: type[BaseSettings]) -> None:
     """Test simple output without env_prefix."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
@@ -52,16 +71,30 @@ def test_simple_without_env_prefix(simple_settings: Any) -> None:
 # =============================================================================
 
 
-def test_simple_with_default(simple_settings: Any) -> None:
+def test_simple_with_default(simple_settings: type[BaseSettings]) -> None:
     """Test default value is displayed."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert 'Default: "value"' in result
+    assert result == (
+        """\
+Settings
+========
+
+Test settings.
+
+`field`: ['string']
+-------------------
+
+Field description
+
+Default: "value"
+"""
+    )
 
 
 def test_simple_without_default() -> None:
-    """Test required field without default."""
+    """Test required field without a default."""
 
     class Settings(BaseSettings):
         field: str = Field(description="Required field")
@@ -69,7 +102,7 @@ def test_simple_without_default() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    # Should not have Default line for required field
+    # Should not have a Default line for required field
     assert "Default:" not in result
 
 
@@ -82,7 +115,16 @@ def test_simple_with_deprecated() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "(⚠️ Deprecated)" in result
+    assert result == (
+        """\
+Settings
+========
+
+`field` (⚠️ Deprecated): ['string']
+-----------------------------------
+Default: "value"
+"""
+    )
 
 
 def test_simple_with_examples() -> None:
@@ -94,9 +136,17 @@ def test_simple_with_examples() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "Examples:" in result
-    assert "ex1" in result
-    assert "ex2" in result
+    assert result == (
+        """\
+Settings
+========
+
+`field`: ['string']
+-------------------
+Default: "default"
+Examples: "ex1", "ex2"
+"""
+    )
 
 
 def test_simple_without_examples() -> None:
@@ -108,16 +158,30 @@ def test_simple_without_examples() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    # Should not have Examples line when examples equal default
+    # Should not have an Examples line when examples equal default
     assert "Examples:" not in result
 
 
-def test_simple_with_description(simple_settings: Any) -> None:
+def test_simple_with_description(simple_settings: type[BaseSettings]) -> None:
     """Test description is displayed."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert "Field description" in result
+    assert result == (
+        """\
+Settings
+========
+
+Test settings.
+
+`field`: ['string']
+-------------------
+
+Field description
+
+Default: "value"
+"""
+    )
 
 
 def test_simple_without_description() -> None:
@@ -130,7 +194,16 @@ def test_simple_without_description() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Field should still be present
-    assert "`field`" in result
+    assert result == (
+        """\
+Settings
+========
+
+`field`: ['string']
+-------------------
+Default: "value"
+"""
+    )
 
 
 # =============================================================================
@@ -150,10 +223,28 @@ def test_simple_with_various_types() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "string" in result
-    assert "integer" in result
-    assert "boolean" in result
-    assert "array" in result
+    assert result == (
+        """\
+Settings
+========
+
+`str_field`: ['string']
+-----------------------
+Default: "value"
+
+`int_field`: ['integer']
+------------------------
+Default: 42
+
+`bool_field`: ['boolean']
+-------------------------
+Default: true
+
+`list_field`: ['array']
+-----------------------
+Default: []
+"""
+    )
 
 
 # =============================================================================
@@ -170,7 +261,16 @@ def test_simple_with_alias() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "`external_name`" in result
+    assert result == (
+        """\
+Settings
+========
+
+`external_name`: ['string']
+---------------------------
+Default: "value"
+"""
+    )
 
 
 # =============================================================================
@@ -178,12 +278,26 @@ def test_simple_with_alias() -> None:
 # =============================================================================
 
 
-def test_simple_with_docstring(simple_settings: Any) -> None:
+def test_simple_with_docstring(simple_settings: type[BaseSettings]) -> None:
     """Test settings docstring is displayed."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
-    assert "Test settings." in result
+    assert result == (
+        """\
+Settings
+========
+
+Test settings.
+
+`field`: ['string']
+-------------------
+
+Field description
+
+Default: "value"
+"""
+    )
 
 
 def test_simple_without_docstring() -> None:
@@ -195,9 +309,17 @@ def test_simple_without_docstring() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    # Should still have header
-    assert "Settings" in result
-    assert "========" in result
+    # Should still have a header
+    assert result == (
+        """\
+Settings
+========
+
+`field`: ['string']
+-------------------
+Default: "value"
+"""
+    )
 
 
 # =============================================================================
@@ -205,31 +327,31 @@ def test_simple_without_docstring() -> None:
 # =============================================================================
 
 
-def test_simple_full_settings(full_settings: Any) -> None:
+def test_simple_full_settings(full_settings: type[BaseSettings]) -> None:
     """Test comprehensive simple output with all features."""
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(full_settings))
 
     # Check main settings
-    assert result == (
-        "Settings\n"
-        "========\n"
-        "\n"
-        "`log_level`: ['\"DEBUG\"', '\"INFO\"', '\"WARNING\"', '\"ERROR\"', "
-        "'\"CRITICAL\"']\n"
-        "------------------------------------------------------------------------\n"
-        "\n"
-        "The log level to use\n"
-        "\n"
-        'Default: "INFO"\n'
-        "\n"
-        "`log_format`: ['string']\n"
-        "------------------------\n"
-        "\n"
-        "The log format to use\n"
-        "\n"
-        'Default: "%(levelname)-8s | %(asctime)s | %(name)s | %(message)s"\n'
-    )
+    expected = """\
+Settings
+========
+
+`log_level`: ['"DEBUG"', '"INFO"', '"WARNING"', '"ERROR"', '"CRITICAL"']
+------------------------------------------------------------------------
+
+The log level to use
+
+Default: "INFO"
+
+`log_format`: ['string']
+------------------------
+
+The log format to use
+
+Default: "%(levelname)-8s | %(asctime)s | %(name)s | %(message)s"
+"""
+    assert result == expected
 
 
 def test_simple_multiple_settings() -> None:
@@ -251,12 +373,27 @@ def test_simple_multiple_settings() -> None:
         SettingsInfoModel.from_settings_model(Settings2),
     )
 
-    assert "Settings1" in result
-    assert "First settings." in result
-    assert "`field1`" in result
-    assert "Settings2" in result
-    assert "Second settings." in result
-    assert "`field2`" in result
+    assert result == (
+        """\
+Settings1
+=========
+
+First settings.
+
+`field1`: ['string']
+--------------------
+Default: "value1"
+
+Settings2
+=========
+
+Second settings.
+
+`field2`: ['string']
+--------------------
+Default: "value2"
+"""
+    )
 
 
 def test_simple_multiple_fields() -> None:
@@ -270,9 +407,30 @@ def test_simple_multiple_fields() -> None:
     generator = SimpleGenerator()
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "`field1`" in result
-    assert "`field2`" in result
-    assert "`field3`" in result
-    assert "First field" in result
-    assert "Second field" in result
-    assert "Third field" in result
+    assert result == (
+        """\
+Settings
+========
+
+`field1`: ['string']
+--------------------
+
+First field
+
+Default: "value1"
+
+`field2`: ['integer']
+---------------------
+
+Second field
+
+Default: 42
+
+`field3`: ['boolean']
+---------------------
+
+Third field
+
+Default: true
+"""
+    )

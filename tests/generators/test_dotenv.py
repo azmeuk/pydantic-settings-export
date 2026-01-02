@@ -11,7 +11,7 @@ def test_dotenv_simple(simple_settings: type[BaseSettings]) -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(simple_settings))
 
     # Optional field should be commented
-    assert "# FIELD=" in result
+    assert result == '# FIELD="value"\n'
 
 
 def test_dotenv_with_required_field(mixed_settings: type[BaseSettings]) -> None:
@@ -20,10 +20,7 @@ def test_dotenv_with_required_field(mixed_settings: type[BaseSettings]) -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
 
     # Required field should not be commented
-    assert "REQUIRED=" in result
-    assert "# REQUIRED=" not in result
-    # Optional field should be commented
-    assert "# OPTIONAL=" in result
+    assert result == 'REQUIRED=\n# OPTIONAL="value"\n'
 
 
 # =============================================================================
@@ -36,8 +33,7 @@ def test_dotenv_mode_all(mixed_settings: type[BaseSettings]) -> None:
     generator = DotEnvGenerator(generator_config=DotEnvSettings(mode="all", split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
 
-    assert "REQUIRED=" in result
-    assert "# OPTIONAL=" in result
+    assert result == 'REQUIRED=\n# OPTIONAL="value"\n'
 
 
 def test_dotenv_mode_only_optional(mixed_settings: type[BaseSettings]) -> None:
@@ -46,9 +42,7 @@ def test_dotenv_mode_only_optional(mixed_settings: type[BaseSettings]) -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
 
     # Should not include required field
-    assert "REQUIRED=" not in result
-    # Should include optional field
-    assert "# OPTIONAL=" in result
+    assert result == '# OPTIONAL="value"\n'
 
 
 def test_dotenv_mode_only_required(mixed_settings: type[BaseSettings]) -> None:
@@ -56,11 +50,8 @@ def test_dotenv_mode_only_required(mixed_settings: type[BaseSettings]) -> None:
     generator = DotEnvGenerator(generator_config=DotEnvSettings(mode="only-required", split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(mixed_settings))
 
-    # Should include required field
-    assert "REQUIRED=" in result
-    # Optional field should not appear (not even commented)
-    # Note: The line "# OPTIONAL=" should not be present
-    assert "OPTIONAL" not in result or "# OPTIONAL" not in result
+    # Should include only the required field
+    assert result == "REQUIRED=\n"
 
 
 # =============================================================================
@@ -73,8 +64,16 @@ def test_dotenv_split_by_group_true(nested_settings: type[BaseSettings]) -> None
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=True))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
 
-    assert "### Settings" in result
-    assert "### Database" in result
+    expected = """\
+### Settings
+
+### Database
+
+# DATABASE_HOST="localhost"
+DATABASE_PORT=
+"""
+
+    assert result == expected
 
 
 def test_dotenv_split_by_group_false(nested_settings: type[BaseSettings]) -> None:
@@ -82,8 +81,7 @@ def test_dotenv_split_by_group_false(nested_settings: type[BaseSettings]) -> Non
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
 
-    assert "### Settings" not in result
-    assert "### Database" not in result
+    assert result == '# DATABASE_HOST="localhost"\nDATABASE_PORT=\n'
 
 
 # =============================================================================
@@ -101,7 +99,7 @@ def test_dotenv_with_examples() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Examples should be in comments
-    assert "# ex1, ex2" in result or "ex1" in result
+    assert result == '# FIELD="default"  # "ex1", "ex2"\n'
 
 
 def test_dotenv_without_examples() -> None:
@@ -114,9 +112,7 @@ def test_dotenv_without_examples() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Should not have example comments (only the field itself)
-    lines = [line for line in result.strip().split("\n") if line and not line.startswith("###")]
-    # The line should just be the field without an example comment
-    assert any("FIELD=" in line for line in lines)
+    assert result == '# FIELD="default"\n'
 
 
 # =============================================================================
@@ -129,11 +125,12 @@ def test_dotenv_with_alias() -> None:
 
     class Settings(BaseSettings):
         internal_name: str = Field(default="value", alias="EXTERNAL_NAME")
+        internal_name2: str = Field(default="value", alias="external_name2")
 
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "EXTERNAL_NAME=" in result
+    assert result == '# EXTERNAL_NAME="value"\n# EXTERNAL_NAME2="value"\n'
 
 
 # =============================================================================
@@ -151,7 +148,7 @@ def test_dotenv_with_env_prefix() -> None:
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "APP_FIELD=" in result
+    assert result == '# APP_FIELD="value"\n'
 
 
 # =============================================================================
@@ -164,8 +161,7 @@ def test_dotenv_with_nested_settings(nested_settings: type[BaseSettings]) -> Non
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
 
-    assert "DATABASE_HOST=" in result
-    assert "DATABASE_PORT=" in result
+    assert result == '# DATABASE_HOST="localhost"\nDATABASE_PORT=\n'
 
 
 def test_dotenv_nested_with_env_prefix() -> None:
@@ -181,7 +177,7 @@ def test_dotenv_nested_with_env_prefix() -> None:
     generator = DotEnvGenerator(generator_config=DotEnvSettings(split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
-    assert "APP_DATABASE_HOST=" in result
+    assert result == '# APP_DATABASE_HOST="localhost"\n'
 
 
 # =============================================================================
@@ -199,7 +195,7 @@ def test_dotenv_optional_field_shows_default() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Optional field should be commented with default value
-    assert '# FIELD="my_default"' in result
+    assert result == '# FIELD="my_default"\n'
 
 
 def test_dotenv_required_field_empty_value() -> None:
@@ -212,11 +208,7 @@ def test_dotenv_required_field_empty_value() -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
 
     # Required field should have empty value
-    assert "FIELD=" in result
-    # Should not have a value after =
-    lines = result.strip().split("\n")
-    field_line = next(line for line in lines if "FIELD=" in line and not line.startswith("#"))
-    assert field_line.strip() == "FIELD="
+    assert result == "FIELD=\n"
 
 
 # =============================================================================
@@ -230,28 +222,30 @@ def test_dotenv_full_settings(full_settings: type[BaseSettings]) -> None:
     result = generator.generate(SettingsInfoModel.from_settings_model(full_settings))
 
     # Check main settings
-    assert result == (
-        "### Settings\n"
-        "\n"
-        '# LOG_LEVEL="INFO"\n'
-        '# LOG_FORMAT="%(levelname)-8s | %(asctime)s | %(name)s | %(message)s"\n'
-        "\n"
-        "### MongoDB settings\n"
-        "\n"
-        '# MONGODB__MONGODB_URL="mongodb://localhost:27017"\n'
-        '# MONGODB__MONGODB_DB_NAME="test-db"\n'
-        "\n"
-        "### OpenRouter settings\n"
-        "\n"
-        "OPENROUTER__API_KEY=\n"
-        '# OPENROUTER__MODEL="google/gemini-2.5-flash"\n'
-        '# OPENROUTER__BASE_URL="https://openrouter.ai/api/v1"\n'
-        "\n"
-        "### APISettings\n"
-        "\n"
-        '# API__HOST="0.0.0.0"\n'
-        "# API__PORT=8000\n"
-    )
+    expected = """\
+### Settings
+
+# LOG_LEVEL="INFO"
+# LOG_FORMAT="%(levelname)-8s | %(asctime)s | %(name)s | %(message)s"
+
+### MongoDB settings
+
+# MONGODB__MONGODB_URL="mongodb://localhost:27017"
+# MONGODB__MONGODB_DB_NAME="test-db"
+
+### OpenRouter settings
+
+OPENROUTER__API_KEY=
+# OPENROUTER__MODEL="google/gemini-2.5-flash"
+# OPENROUTER__BASE_URL="https://openrouter.ai/api/v1"
+
+### APISettings
+
+# API__HOST="0.0.0.0"
+# API__PORT=8000
+"""
+
+    assert result == expected
 
 
 def test_dotenv_multiple_settings() -> None:
@@ -273,10 +267,16 @@ def test_dotenv_multiple_settings() -> None:
         SettingsInfoModel.from_settings_model(Settings2),
     )
 
-    assert "### Settings1" in result
-    assert "FIELD1=" in result
-    assert "### Settings2" in result
-    assert "FIELD2=" in result
+    expected = """\
+### Settings1
+
+# FIELD1="value1"
+
+### Settings2
+
+# FIELD2="value2"
+"""
+    assert result == expected
 
 
 def test_dotenv_mode_only_required_nested(nested_settings: type[BaseSettings]) -> None:
@@ -284,5 +284,5 @@ def test_dotenv_mode_only_required_nested(nested_settings: type[BaseSettings]) -
     generator = DotEnvGenerator(generator_config=DotEnvSettings(mode="only-required", split_by_group=False))
     result = generator.generate(SettingsInfoModel.from_settings_model(nested_settings))
 
-    # Should only include required field from nested settings
-    assert "DATABASE_PORT=\n" == result
+    # Should only include the required field from nested settings
+    assert result == "DATABASE_PORT=\n"

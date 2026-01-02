@@ -1,6 +1,5 @@
 import warnings
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -70,7 +69,7 @@ def test_exporter_init_empty_generators(pse_settings: PSESettings) -> None:
 # =============================================================================
 
 
-def test_exporter_run_all_returns_paths(simple_settings: Any, tmp_path: Path) -> None:
+def test_exporter_run_all_returns_paths(simple_settings: type[BaseSettings], tmp_path: Path) -> None:
     """Test run_all returns list of paths."""
     pse_settings = PSESettings(root_dir=tmp_path, project_dir=tmp_path)
     output_file = tmp_path / "output.txt"
@@ -115,7 +114,7 @@ def test_exporter_run_all_multiple_settings(tmp_path: Path) -> None:
     assert "Settings2" in content
 
 
-def test_exporter_run_all_no_generators(simple_settings: Any, pse_settings: PSESettings) -> None:
+def test_exporter_run_all_no_generators(simple_settings: type[BaseSettings], pse_settings: PSESettings) -> None:
     """Test run_all with no generators returns empty list."""
     exporter = Exporter(settings=pse_settings, generators=[])
 
@@ -150,7 +149,7 @@ def test_exporter_run_all_with_settings_instance(tmp_path: Path) -> None:
 # =============================================================================
 
 
-def test_exporter_handles_generator_failure(simple_settings: Any, pse_settings: PSESettings) -> None:
+def test_exporter_handles_generator_failure(simple_settings: type[BaseSettings], pse_settings: PSESettings) -> None:
     """Test Exporter handles generator failures with warning."""
     # Create a mock generator that raises an exception
     mock_generator = MagicMock(spec=AbstractGenerator)
@@ -170,7 +169,7 @@ def test_exporter_handles_generator_failure(simple_settings: Any, pse_settings: 
     assert result == []
 
 
-def test_exporter_continues_after_generator_failure(simple_settings: Any, tmp_path: Path) -> None:
+def test_exporter_continues_after_generator_failure(simple_settings: type[BaseSettings], tmp_path: Path) -> None:
     """Test Exporter continues with other generators after one fails."""
     pse_settings = PSESettings(root_dir=tmp_path, project_dir=tmp_path)
     output_file = tmp_path / "output.txt"
@@ -219,7 +218,7 @@ def test_exporter_handles_generator_init_failure() -> None:
 # =============================================================================
 
 
-def test_exporter_creates_output_directory(simple_settings: Any, tmp_path: Path) -> None:
+def test_exporter_creates_output_directory(simple_settings: type[BaseSettings], tmp_path: Path) -> None:
     """Test Exporter creates an output directory if it doesn't exist."""
     pse_settings = PSESettings(root_dir=tmp_path, project_dir=tmp_path)
     nested_dir = tmp_path / "nested" / "dir"
@@ -237,7 +236,7 @@ def test_exporter_creates_output_directory(simple_settings: Any, tmp_path: Path)
     assert output_file in result
 
 
-def test_exporter_skips_unchanged_files(simple_settings: Any, tmp_path: Path) -> None:
+def test_exporter_skips_unchanged_files(simple_settings: type[BaseSettings], tmp_path: Path) -> None:
     """Test Exporter skips writing if file content unchanged."""
     pse_settings = PSESettings(root_dir=tmp_path, project_dir=tmp_path)
     output_file = tmp_path / "output.txt"
