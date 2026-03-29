@@ -13,7 +13,7 @@ from .abstract import AbstractGenerator, BaseGeneratorSettings
 
 try:
     import tomlkit
-    from tomlkit import comment, document, key, nl, table
+    from tomlkit import comment, document, inline_table, key, nl, table
 
     TOMLKIT_AVAILABLE = True
 except ImportError:
@@ -30,6 +30,67 @@ TOML_MODE_MAP: dict[TomlMode, tuple[bool, bool]] = {
     "only-required": (False, True),
 }
 TOML_MODE_MAP_DEFAULT = TOML_MODE_MAP["all"]
+
+TOML_MAX_LINE_WIDTH = 80
+
+
+def _remove_none_values(value: Any) -> Any:
+    """Recursively remove None values from nested structures."""
+    if value is None:
+        return None
+
+    if isinstance(value, dict):
+        cleaned = {}
+        for k, v in value.items():
+            cleaned_value = _remove_none_values(v)
+            if cleaned_value is not None:
+                cleaned[k] = cleaned_value
+        return cleaned
+
+    elif isinstance(value, (list, tuple)):
+        cleaned_items = []
+        for item in value:
+            cleaned_item = _remove_none_values(item)
+            if cleaned_item is not None:
+                cleaned_items.append(cleaned_item)
+        return cleaned_items if cleaned_items else value.__class__()
+
+    return value
+
+
+def _to_inline_tables(value: Any) -> Any:
+    """Recursively convert dicts to inline_table for TOML serialization."""
+    if isinstance(value, dict):
+        it = inline_table()
+        for k, v in value.items():
+            it[k] = _to_inline_tables(v)
+        return it
+    elif isinstance(value, list):
+        return [item if isinstance(item, dict) else _to_inline_tables(item) for item in value]
+    return value
+
+
+def _format_list_value(value: Any, field_key: str, full_key: str) -> Any:
+    """Convert a list to a tomlkit array, using multiline if the inline form exceeds 80 chars.
+
+    Caller is responsible for converting nested dicts to inline tables beforehand.
+    """
+    if not TOMLKIT_AVAILABLE or not isinstance(value, list) or any(isinstance(item, dict) for item in value):
+        return value
+    arr = tomlkit.array()
+    for item in value:
+        arr.append(item)
+    # Check if inline form fits in 80 chars
+    inline_str = tomlkit.dumps({field_key: arr}).strip()
+    if field_key != full_key:
+        inline_str = inline_str.replace(f"{field_key} =", f"{full_key} =", 1)
+    if len(inline_str) <= TOML_MAX_LINE_WIDTH:
+        return arr
+    arr_ml = tomlkit.array()
+    arr_ml.multiline(True)
+    for item in arr:
+        arr_ml.append(item)
+    return arr_ml
 
 
 class TomlSettings(BaseGeneratorSettings):
@@ -265,7 +326,72 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         return lines
 
-    def _add_field_to_container(self, container: Any, field: FieldInfoModel, prefix: str = "") -> None:
+    def _write_value_to_container(self, container: Any, value: Any, full_key: str, prefix: str) -> None:
+        """Write a value to the container, handling dotted-key prefix."""
+        if prefix:
+            key_parts = full_key.split(".")
+            toml_key = key(key_parts)
+            container.append(toml_key, value)
+        else:
+            container[full_key] = value
+
+    def _add_default_hint_when_has_value(
+        self,
+        container: Any,
+        field: FieldInfoModel,
+        field_key: str,
+        full_key: str,
+        prefix: str,
+    ) -> None:
+        """When an instance value is present, add the class default as a commented hint."""
+        if not self.generator_config.show_default:
+            return
+        if field.is_required or field.default is None:
+            container.add(comment(f"{full_key} ="))
+        else:
+            value = field.default
+            value = _remove_none_values(value)
+            if value is not None:
+                value = _to_inline_tables(value)
+                value = _format_list_value(value, field_key, full_key)
+                value_str = tomlkit.dumps({field_key: value}).strip()
+                if prefix:
+                    value_str = value_str.replace(f"{field_key} =", f"{full_key} =", 1)
+                for line in value_str.split("\n"):
+                    container.add(comment(line))
+
+    def _add_commented_default(
+        self,
+        container: Any,
+        field: FieldInfoModel,
+        field_key: str,
+        full_key: str,
+        prefix: str,
+        section_path: str,
+    ) -> None:
+        """Add the field's default value as commented-out TOML."""
+        value = field.default
+        value = _remove_none_values(value)
+        if value is None:
+            return
+        value = _to_inline_tables(value)
+        value = _format_list_value(value, field_key, full_key)
+        value_str = tomlkit.dumps({field_key: value}).strip()
+        if prefix:
+            value_str = value_str.replace(f"{field_key} =", f"{full_key} =", 1)
+        if section_path and f"[[{field_key}]]" in value_str:
+            full_path = f"{section_path}.{field_key}"
+            value_str = value_str.replace(f"[[{field_key}]]", f"[[{full_path}]]")
+        for line in value_str.split("\n"):
+            container.add(comment(line))
+
+    def _add_field_to_container(
+        self,
+        container: Any,
+        field: FieldInfoModel,
+        prefix: str = "",
+        section_path: str = "",
+    ) -> None:
         """Add a field to a TOML document or section container."""
         field_key = self._make_toml_key(field)
         full_key = f"{prefix}{field_key}" if prefix else field_key
@@ -274,24 +400,25 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         for line in comment_lines:
             container.add(comment(line))
 
-        if not self._should_comment_field(field):
-            value = field.value if field.has_value else field.default
-            if prefix:
-                key_parts = full_key.split(".")
-                toml_key = key(key_parts)
-                container.append(toml_key, value)
-            else:
-                container[full_key] = value
+        if field.has_value:
+            value = field.value
+            value = _remove_none_values(value)
+            value = _to_inline_tables(value)
+            value = _format_list_value(value, field_key, full_key)
+            self._write_value_to_container(container, value, full_key, prefix)
+
+        elif not self._should_comment_field(field):
+            value = field.default
+            value = _remove_none_values(value)
+            value = _to_inline_tables(value)
+            value = _format_list_value(value, field_key, full_key)
+            self._write_value_to_container(container, value, full_key, prefix)
 
         elif field.is_required or field.default is None:
             container.add(comment(f"{full_key} ="))
 
         else:
-            value = field.default
-            value_str = tomlkit.dumps({field_key: value}).strip()
-            if prefix:
-                value_str = value_str.replace(f"{field_key} =", f"{full_key} =", 1)
-            container.add(comment(value_str))
+            self._add_commented_default(container, field, field_key, full_key, prefix, section_path)
 
         container.add(nl())
 
@@ -320,7 +447,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             if field.is_env_only:
                 continue  # synthetic JSON fields are for env generators only
             if self._should_include_field(field):
-                self._add_field_to_container(container, field)
+                self._add_field_to_container(container, field, section_path=section_path)
 
         for child in settings.child_settings:
             next_depth = current_depth + 1

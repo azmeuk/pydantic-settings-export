@@ -1,6 +1,7 @@
 """Tests for TOML generator."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import Field
@@ -845,5 +846,231 @@ def test_toml_generator_with_field_description_only() -> None:
 # Database host
 # Default: "localhost"
 # host = "localhost"
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_dict_of_scalars() -> None:
+    """Test that dict fields with scalar value types use inline table syntax.
+
+    Fields typed as `dict`, `dict[str, int]`, `dict[str, str]`, etc. should use
+    inline syntax:
+        # params = {}
+        # params = {key = "value"}
+    Not section syntax:
+        # [params]
+
+    This is determined by the field's type annotation:
+    - dict with scalar values (str, int, bool, etc.) → inline table
+    - dict with complex values (BaseModel, list, dict) → section table
+    """
+
+    class Settings(BaseSettings):
+        """Settings with dict of scalars."""
+
+        params: dict[str, int] = Field(default_factory=dict, description="Additional parameters")
+
+    generator = TomlGenerator()
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+# Settings with dict of scalars.
+
+# params: object
+# Additional parameters
+# Default: {}
+# params = {}
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_list_of_dicts_in_nested_section() -> None:
+    """Test that list[dict] fields in nested sections use full path in array of tables.
+
+    When a field is typed as list[dict] and is inside a nested section,
+    the array of tables syntax should use the full path:
+        # [[parent.child.field]]
+    Not just the field name:
+        # [[field]]
+    """
+
+    class Child(BaseSettings):
+        """Child settings."""
+
+        filters: list[dict[str, str]] = Field(
+            default_factory=lambda: [{"name": "admin"}, {"group": "admins"}],
+            description="List of filters",
+        )
+
+    class Parent(BaseSettings):
+        """Parent settings."""
+
+        child: Child = Field(default_factory=Child)
+
+    generator = TomlGenerator()
+    result = generator.generate(SettingsInfoModel.from_settings_model(Parent))
+
+    expected = """\
+# Parent
+# Parent settings.
+
+# Child
+# Child settings.
+
+[child]
+# filters: array
+# List of filters
+# Default: [{"name":"admin"},{"group":"admins"}]
+# [[child.filters]]
+# name = "admin"
+#
+# [[child.filters]]
+# group = "admins"
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_from_list() -> None:
+    """Test None values are removed from list defaults."""
+
+    class Settings(BaseSettings):
+        items: list[Any] = ["a", None, "b"]
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# items: array
+# Default: ["a",null,"b"]
+items = ["a", "b"]
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_from_nested_list() -> None:
+    """Test None values are removed recursively from nested lists."""
+
+    class Settings(BaseSettings):
+        items: list[Any] = [["a", None], [None, "b"]]
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# items: array
+# Default: [["a",null],[null,"b"]]
+items = [["a"], ["b"]]
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_empty_list_preserved() -> None:
+    """Test list with only None values becomes empty list."""
+
+    class Settings(BaseSettings):
+        items: list[Any] = [None, None]
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# items: array
+# Default: [null,null]
+items = []
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_from_dict_in_list() -> None:
+    """Test None values are removed from dicts inside lists."""
+
+    class Settings(BaseSettings):
+        items: list[dict[str, Any]] = [{"a": 1, "b": None}]
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# items: array
+# Default: [{"a":1,"b":null}]
+
+[[items]]
+a = 1
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_with_comment_defaults_true() -> None:
+    """Test None removal works with comment_defaults=True."""
+
+    class Settings(BaseSettings):
+        items: list[Any] = ["a", None, "b"]
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=True))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# items: array
+# Default: ["a",null,"b"]
+# items = ["a", "b"]
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_with_prefix() -> None:
+    """Test None removal works with dotted key prefix."""
+
+    class Database(BaseSettings):
+        items: list[Any] = ["a", None, "b"]
+
+    class Settings(BaseSettings):
+        database: Database = Field(default_factory=Database)
+
+    generator = TomlGenerator(generator_config=TomlSettings(section_depth=0, comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# Database
+
+# database.items: array
+# Default: ["a",null,"b"]
+database.items = ["a", "b"]
+"""
+    assert result == expected
+
+
+def test_toml_remove_none_with_prefix_commented() -> None:
+    """Test None removal works with dotted key prefix and comment_defaults=True."""
+
+    class Database(BaseSettings):
+        items: list[Any] = ["a", None, "b"]
+
+    class Settings(BaseSettings):
+        database: Database = Field(default_factory=Database)
+
+    generator = TomlGenerator(generator_config=TomlSettings(section_depth=0, comment_defaults=True))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+
+# Database
+
+# database.items: array
+# Default: ["a",null,"b"]
+# database.items = ["a", "b"]
 """
     assert result == expected
