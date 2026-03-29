@@ -496,6 +496,100 @@ class SettingsInfoModel(BaseModel):
         False,
         description="Propagated from root model_config. When False, generators should uppercase env names.",
     )
+    is_dict_entry: bool = Field(False, description="Whether this settings represents a dict[str, BaseModel] entry.")
+
+    @classmethod
+    def _process_dict_of_basemodel_field(
+        cls,
+        name: str,
+        field_info: FieldInfo,
+        instance: BaseModel | None,
+        global_settings: PSESettings | None,
+        prefix: str,
+        nested_delimiter: str | None,
+        case_sensitive: bool,
+        env_accessible: bool,
+        is_nested: bool,
+        populate_by_name: bool,
+    ) -> tuple["SettingsInfoModel", FieldInfoModel | None] | None:
+        """Build child settings info for a dict[str, BaseModel] field."""
+        annotation = _unwrap_union_type(field_info.annotation)
+        if get_origin(annotation) is not dict:
+            return None
+
+        key_type, value_type = get_args(annotation)
+        if key_type is not str or not isclass(value_type) or not issubclass(value_type, BaseModel):
+            return None
+
+        if instance is not None:
+            dict_value = getattr(instance, name, None)
+        elif field_info.default_factory:
+            dict_value = field_info.default_factory()
+        elif field_info.default is not PydanticUndefined:
+            dict_value = field_info.default
+        else:
+            dict_value = None
+
+        if not dict_value:
+            return None
+
+        env_expandable = nested_delimiter is not None and env_accessible
+        entry_children: list[SettingsInfoModel] = []
+        class_docs = (getdoc(value_type) or "").split("\f", 1)[0].strip()
+        for entry_key, entry_instance in dict_value.items():
+            child_prefix = (
+                f"{prefix}{name}{nested_delimiter}{entry_key}{nested_delimiter}"
+                if env_expandable and nested_delimiter
+                else ""
+            )
+            entry_sim = cls.from_settings_model(
+                entry_instance,
+                global_settings=global_settings,
+                prefix=child_prefix,
+                nested_delimiter=nested_delimiter if env_expandable else None,
+                field_name=entry_key,
+                case_sensitive=case_sensitive,
+                env_accessible=env_expandable,
+            )
+            entry_children.append(
+                entry_sim.model_copy(
+                    update={
+                        "name": "",
+                        "docs": "",
+                        "field_description": "",
+                        "is_dict_entry": True,
+                    }
+                )
+            )
+
+        child = cls(
+            name=value_type.__name__,
+            docs=class_docs,
+            env_prefix=f"{prefix}{name}{nested_delimiter}" if env_expandable and nested_delimiter else "",
+            field_name=name,
+            field_description=field_info.description or "",
+            fields=[],
+            child_settings=entry_children,
+            env_accessible=env_expandable,
+            case_sensitive=case_sensitive,
+            is_dict_entry=False,
+        )
+        if env_expandable:
+            return child, None
+
+        json_field = FieldInfoModel.from_settings_field(
+            name,
+            field_info,
+            global_settings,
+            instance,
+            skip_factory_default=instance is not None,
+            env_prefix=prefix,
+            is_nested=is_nested,
+            case_sensitive=case_sensitive,
+            populate_by_name=populate_by_name,
+            env_accessible=env_accessible,
+        )
+        return child, json_field.model_copy(update={"is_env_only": True})
 
     @classmethod
     def _process_nested_model_field(
@@ -613,6 +707,26 @@ class SettingsInfoModel(BaseModel):
 
             annotation = _resolve_field_annotation(field_info.annotation)
 
+            dict_child = cls._process_dict_of_basemodel_field(
+                name=name,
+                field_info=field_info,
+                instance=instance,
+                global_settings=global_settings,
+                prefix=prefix,
+                nested_delimiter=nested_delimiter,
+                case_sensitive=case_sensitive,
+                env_accessible=env_accessible,
+                is_nested=is_nested,
+                populate_by_name=populate_by_name,
+            )
+            if dict_child is not None:
+                child, json_field = dict_child
+                child_settings.append(child)
+                if json_field is None:
+                    continue
+                fields.append(json_field)
+                continue
+
             # Nested BaseModel/BaseSettings: always add to child_settings (structural generators
             # like TOML/simple always expand). For env generators (dotenv/markdown), only
             # env_accessible=True children are expanded; False ones appear as JSON fields.
@@ -672,8 +786,10 @@ class SettingsInfoModel(BaseModel):
             docs=docs,
             env_prefix=prefix,
             field_name=field_name,
+            field_description="",
             fields=fields,
             child_settings=child_settings,
             env_accessible=env_accessible,
             case_sensitive=case_sensitive,
+            is_dict_entry=False,
         )

@@ -664,6 +664,127 @@ debug = true
     assert result == expected
 
 
+def test_toml_generator_with_dict_of_basemodel() -> None:
+    """Test dict[str, BaseModel] fields are expanded as TOML sections."""
+
+    class Item(BaseSettings):
+        """Item configuration."""
+
+        value: int = 1
+
+    class Settings(BaseSettings):
+        """Settings with dict field."""
+
+        items: dict[str, Item] = Field(
+            default_factory=lambda: {
+                "foo": Item(),
+                "bar": Item(value=42),
+            }
+        )
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+# Settings with dict field.
+
+# Item
+# Item configuration.
+
+[items.foo]
+# value: integer
+# Default: 1
+value = 1
+
+[items.bar]
+# value: integer
+# Default: 1
+value = 42
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_dict_field_description() -> None:
+    """Test that field description is displayed for dict fields."""
+
+    class Item(BaseSettings):
+        """Item configuration."""
+
+        value: int = 1
+
+    class Settings(BaseSettings):
+        """Settings with dict field."""
+
+        items: dict[str, Item] = Field(
+            default_factory=lambda: {
+                "foo": Item(),
+                "bar": Item(value=42),
+            },
+            description="Mapping of items with their configurations",
+        )
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+# Settings with dict field.
+
+# Mapping of items with their configurations
+
+# Item
+# Item configuration.
+
+[items.foo]
+# value: integer
+# Default: 1
+value = 1
+
+[items.bar]
+# value: integer
+# Default: 1
+value = 42
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_dict_of_basemodel_literal_default() -> None:
+    """Test dict[str, BaseModel] fields with a literal default dict are expanded as TOML sections."""
+
+    class Item(BaseSettings):
+        """Item configuration."""
+
+        value: int = 1
+
+    class Settings(BaseSettings):
+        """Settings with dict field."""
+
+        items: dict[str, Item] = {"a": Item(), "b": Item(value=99)}
+
+    generator = TomlGenerator(generator_config=TomlSettings(comment_defaults=False))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# Settings
+# Settings with dict field.
+
+# Item
+# Item configuration.
+
+[items.a]
+# value: integer
+# Default: 1
+value = 1
+
+[items.b]
+# value: integer
+# Default: 1
+value = 99
+"""
+    assert result == expected
+
+
 def test_toml_instance_shows_default_in_comment() -> None:
     """Instance should show default value in the comment section."""
 

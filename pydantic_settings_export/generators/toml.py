@@ -342,12 +342,14 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         field_key: str,
         full_key: str,
         prefix: str,
+        is_dict_entry: bool = False,
     ) -> None:
         """When an instance value is present, add the class default as a commented hint."""
         if not self.generator_config.show_default:
             return
         if field.is_required or field.default is None:
-            container.add(comment(f"{full_key} ="))
+            if not is_dict_entry:
+                container.add(comment(f"{full_key} ="))
         else:
             value = field.default
             value = _remove_none_values(value)
@@ -391,6 +393,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         field: FieldInfoModel,
         prefix: str = "",
         section_path: str = "",
+        is_dict_entry: bool = False,
     ) -> None:
         """Add a field to a TOML document or section container."""
         field_key = self._make_toml_key(field)
@@ -415,7 +418,8 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             self._write_value_to_container(container, value, full_key, prefix)
 
         elif field.is_required or field.default is None:
-            container.add(comment(f"{full_key} ="))
+            if not is_dict_entry:
+                container.add(comment(f"{full_key} ="))
 
         else:
             self._add_commented_default(container, field, field_key, full_key, prefix, section_path)
@@ -433,7 +437,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             if field.is_env_only:
                 continue  # synthetic JSON fields are for env generators only
             if self._should_include_field(field):
-                self._add_field_to_container(container, field, prefix=dotted_prefix)
+                self._add_field_to_container(container, field, prefix=dotted_prefix, is_dict_entry=child.is_dict_entry)
 
     def _add_settings_to_container(
         self,
@@ -447,7 +451,9 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             if field.is_env_only:
                 continue  # synthetic JSON fields are for env generators only
             if self._should_include_field(field):
-                self._add_field_to_container(container, field, section_path=section_path)
+                self._add_field_to_container(
+                    container, field, section_path=section_path, is_dict_entry=settings.is_dict_entry
+                )
 
         for child in settings.child_settings:
             next_depth = current_depth + 1
@@ -479,7 +485,8 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         section = table()
         container[section_name] = section
-        container.add(nl())
+        if not child.is_dict_entry:
+            container.add(nl())
 
         self._add_settings_to_container(section, child, current_depth, section_path or section_name)
 
