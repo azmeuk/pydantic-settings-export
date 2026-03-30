@@ -14,6 +14,7 @@ from .abstract import AbstractGenerator, BaseGeneratorSettings
 try:
     import tomlkit
     from tomlkit import comment, document, inline_table, key, nl, table
+    from tomlkit.items import Whitespace as TomlkitWhitespace
 
     TOMLKIT_AVAILABLE = True
 except ImportError:
@@ -67,6 +68,37 @@ def _to_inline_tables(value: Any) -> Any:
         return it
     elif isinstance(value, list):
         return [item if isinstance(item, dict) else _to_inline_tables(item) for item in value]
+    return value
+
+
+def _is_complex_value(value: Any) -> bool:
+    """True if value contains nested dict or list structures."""
+    if isinstance(value, dict):
+        return any(isinstance(v, (dict, list)) for v in value.values())
+    if isinstance(value, list):
+        return any(isinstance(item, (dict, list)) for item in value)
+    return False
+
+
+def _value_to_toml(value: Any) -> Any:
+    """Convert a value to a tomlkit item using smart dict rendering.
+
+    Dicts are rendered as inline tables only when all values are non-complex
+    (no nested dicts or lists). Otherwise they become TOML table sections.
+    """
+    if isinstance(value, dict):
+        if all(not _is_complex_value(v) for v in value.values()):
+            it = inline_table()
+            for k, v in value.items():
+                it[k] = _value_to_toml(v)
+            return it
+        else:
+            t = table()
+            for k, v in value.items():
+                t.add(k, _value_to_toml(v))
+            return t
+    elif isinstance(value, list):
+        return [_value_to_toml(item) for item in value]
     return value
 
 
@@ -354,7 +386,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             value = field.default
             value = _remove_none_values(value)
             if value is not None:
-                value = _to_inline_tables(value)
+                value = _value_to_toml(value)
                 value = _format_list_value(value, field_key, full_key)
                 value_str = tomlkit.dumps({field_key: value}).strip()
                 if prefix:
@@ -376,7 +408,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         value = _remove_none_values(value)
         if value is None:
             return
-        value = _to_inline_tables(value)
+        value = _value_to_toml(value)
         value = _format_list_value(value, field_key, full_key)
         value_str = tomlkit.dumps({field_key: value}).strip()
         if prefix:
@@ -406,14 +438,14 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         if field.has_value:
             value = field.value
             value = _remove_none_values(value)
-            value = _to_inline_tables(value)
+            value = _value_to_toml(value)
             value = _format_list_value(value, field_key, full_key)
             self._write_value_to_container(container, value, full_key, prefix)
 
         elif not self._should_comment_field(field):
             value = field.default
             value = _remove_none_values(value)
-            value = _to_inline_tables(value)
+            value = _value_to_toml(value)
             value = _format_list_value(value, field_key, full_key)
             self._write_value_to_container(container, value, full_key, prefix)
 
@@ -489,6 +521,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             container.add(nl())
 
         self._add_settings_to_container(section, child, current_depth, section_path or section_name)
+        section.add(TomlkitWhitespace(""))
 
     def _create_prefix_section(self, doc: Any, prefix: str) -> Any:
         """Create nested sections for a dotted prefix (e.g., 'tool.myapp')."""
