@@ -15,6 +15,7 @@ from .abstract import AbstractGenerator, BaseGeneratorSettings
 try:
     import tomlkit
     from tomlkit import comment, document, inline_table, key, nl, table
+    from tomlkit.items import Table as TomlkitTable
     from tomlkit.items import Whitespace as TomlkitWhitespace
 
     TOMLKIT_AVAILABLE = True
@@ -25,6 +26,7 @@ __all__ = ("TomlGenerator", "TomlSettings")
 
 
 TomlMode = Literal["all", "only-optional", "only-required"]
+TomlListDictMode = Literal["array-of-tables", "inline"]
 
 TOML_MODE_MAP: dict[TomlMode, tuple[bool, bool]] = {
     "all": (True, True),
@@ -103,13 +105,26 @@ def _value_to_toml(value: Any) -> Any:
     return value
 
 
-def _format_list_value(value: Any, field_key: str, full_key: str) -> Any:
+def _format_list_value(value: Any, field_key: str, full_key: str, list_dict_mode: TomlListDictMode) -> Any:
     """Convert a list to a tomlkit array, using multiline if the inline form exceeds 80 chars.
 
     Caller is responsible for converting nested dicts to inline tables beforehand.
     """
-    if not TOMLKIT_AVAILABLE or not isinstance(value, list) or any(isinstance(item, dict) for item in value):
+    if not TOMLKIT_AVAILABLE or not isinstance(value, list):
         return value
+
+    if any(isinstance(item, dict) for item in value):
+        if list_dict_mode != "inline":
+            return value
+
+        arr = tomlkit.array()
+        for item in value:
+            if isinstance(item, dict):
+                arr.append(_to_inline_tables(item))
+            else:
+                arr.append(item)
+        return arr
+
     arr = tomlkit.array()
     for item in value:
         arr.append(item)
@@ -124,6 +139,29 @@ def _format_list_value(value: Any, field_key: str, full_key: str) -> Any:
     for item in arr:
         arr_ml.append(item)
     return arr_ml
+
+
+def _format_inline_comment_value(value: Any, list_dict_mode: TomlListDictMode) -> Any:
+    """Format a value for commented TOML assignments using inline syntax when possible."""
+    if not TOMLKIT_AVAILABLE:
+        return value
+
+    if isinstance(value, list):
+        arr = tomlkit.array()
+        for item in value:
+            if isinstance(item, dict):
+                if list_dict_mode == "inline":
+                    arr.append(_to_inline_tables(item))
+                else:
+                    return value
+            else:
+                arr.append(item)
+        return arr
+
+    if isinstance(value, dict):
+        return _to_inline_tables(value)
+
+    return value
 
 
 def default_header_formatter(name: str, docstring: str) -> str:
@@ -273,6 +311,14 @@ class TomlSettings(BaseGeneratorSettings):
             "The prefix does not count towards section_depth."
         ),
         examples=["tool.myapp", "app.config"],
+    )
+
+    list_dict_mode: TomlListDictMode = Field(
+        "array-of-tables",
+        description=(
+            "How to render list[dict] values in TOML. "
+            "'array-of-tables' uses [[section]] syntax, while 'inline' uses an array of inline tables."
+        ),
     )
 
 
@@ -486,7 +532,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         if value is None:
             return
         value = _value_to_toml(value)
-        value = _format_list_value(value, field_key, full_key)
+        value = _format_inline_comment_value(value, self.generator_config.list_dict_mode)
         value_str = tomlkit.dumps({field_key: value}).strip()
         if prefix:
             value_str = value_str.replace(f"{field_key} =", f"{full_key} =", 1)
@@ -532,31 +578,31 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             container.add(comment(line))
 
         if field.has_value:
-            self._add_default_hint_when_has_value(
-                container,
-                field,
-                field_key,
-                full_key,
-                prefix,
-                section_path,
-                is_dict_entry=is_dict_entry,
-            )
             value = field.value
             value = _remove_none_values(value)
             value = _value_to_toml(value)
-            value = _format_list_value(value, field_key, full_key)
+            value = _format_list_value(value, field_key, full_key, self.generator_config.list_dict_mode)
+            if not isinstance(value, TomlkitTable):
+                self._add_default_hint_when_has_value(
+                    container,
+                    field,
+                    field_key,
+                    full_key,
+                    prefix,
+                    section_path,
+                    is_dict_entry=is_dict_entry,
+                )
             self._write_value_to_container(container, value, full_key, prefix)
 
         elif not self._should_comment_field(field):
             value = field.default
             value = _remove_none_values(value)
             value = _value_to_toml(value)
-            value = _format_list_value(value, field_key, full_key)
+            value = _format_list_value(value, field_key, full_key, self.generator_config.list_dict_mode)
             self._write_value_to_container(container, value, full_key, prefix)
 
         elif field.is_required or field.default is None:
-            if not is_dict_entry:
-                container.add(comment(f"{full_key} ="))
+            container.add(comment(f"{full_key} ="))
 
         else:
             self._add_commented_default(container, field, field_key, full_key, prefix, section_path)
@@ -615,6 +661,26 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         section_path: str | None = None,
     ) -> None:
         """Add a child settings as a TOML section, including nested child settings recursively."""
+        container_body = getattr(container, "body", None)
+        if container_body is None:
+            container_body = getattr(getattr(container, "value", None), "body", None)
+
+        will_emit_header = (
+            self.generator_config.show_header
+            and self.generator_config.header_formatter is not None
+            and bool(child.name or child.docs)
+        )
+
+        if (
+            container_body
+            and len(container_body) > 1
+            and isinstance(container_body[-1][1], TomlkitWhitespace)
+            and container_body[-2][0] is not None
+            and not child.field_description
+            and not will_emit_header
+        ):
+            container_body.pop()
+
         if child.field_description:
             self._add_description_comments(container, child.field_description)
 
@@ -622,11 +688,8 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         section = table()
         container[section_name] = section
-        if not child.is_dict_entry:
-            container.add(nl())
 
         self._add_settings_to_container(section, child, current_depth, section_path or section_name)
-        section.add(TomlkitWhitespace(""))
 
     def _create_prefix_section(self, doc: Any, prefix: str) -> Any:
         """Create nested sections for a dotted prefix (e.g., 'tool.myapp')."""

@@ -1149,6 +1149,41 @@ def test_toml_generator_with_list_of_dicts_in_nested_section() -> None:
     assert result == expected
 
 
+def test_toml_generator_with_list_of_dicts_in_nested_section_inline_mode() -> None:
+    """list[dict] fields can be rendered as inline arrays of inline tables."""
+
+    class Child(BaseSettings):
+        """Child settings."""
+
+        filters: list[dict[str, str]] = Field(
+            default_factory=lambda: [{"name": "admin"}, {"group": "admins"}],
+            description="List of filters",
+        )
+
+    class Parent(BaseSettings):
+        """Parent settings."""
+
+        child: Child = Field(default_factory=Child)
+
+    generator = TomlGenerator(generator_config=TomlSettings(list_dict_mode="inline"))
+    result = generator.generate(SettingsInfoModel.from_settings_model(Parent))
+
+    expected = """\
+# Parent
+# Parent settings.
+
+# Child
+# Child settings.
+
+[child]
+# filters: array
+# List of filters
+# Default: [{"name":"admin"},{"group":"admins"}]
+# filters = [{name = "admin"}, {group = "admins"}]
+"""
+    assert result == expected
+
+
 def test_toml_remove_none_from_list() -> None:
     """Test None values are removed from list defaults."""
 
