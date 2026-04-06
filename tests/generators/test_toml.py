@@ -7,7 +7,7 @@ import pytest
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-from pydantic_settings_export import SettingsInfoModel, TomlGenerator, TomlSettings
+from pydantic_settings_export import SettingsInfoModel, TomlGenerator, TomlSettings, value_repr
 
 
 @pytest.fixture
@@ -180,6 +180,54 @@ def test_toml_generator_with_description_transformer() -> None:
 # field: string
 # LOWERCASE TEXT
 # Default: "value"
+# field = "value"
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_configurable_formatters() -> None:
+    """Test formatter overrides via TomlSettings."""
+
+    class Settings(BaseSettings):
+        field: str = Field(default="value", description="Field description")
+
+    generator = TomlGenerator(
+        generator_config=TomlSettings(
+            header_formatter=None,
+            type_formatter=None,
+            description_formatter=str.upper,
+            default_formatter=lambda value: f"DEFAULT={value_repr(value)}",
+            examples_formatter=lambda examples: f"EXAMPLES={len(examples)}",
+        )
+    )
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
+# FIELD DESCRIPTION
+# DEFAULT="value"
+# field = "value"
+"""
+    assert result == expected
+
+
+def test_toml_generator_with_none_formatters() -> None:
+    """Test formatter callbacks can disable individual comment kinds."""
+
+    class Settings(BaseSettings):
+        field: str = Field(default="value", description="Field description")
+
+    generator = TomlGenerator(
+        generator_config=TomlSettings(
+            header_formatter=None,
+            type_formatter=None,
+            description_formatter=None,
+            default_formatter=None,
+            examples_formatter=None,
+        )
+    )
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    expected = """\
 # field = "value"
 """
     assert result == expected
