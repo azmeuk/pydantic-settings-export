@@ -236,6 +236,14 @@ class TomlSettings(BaseGeneratorSettings):
         description="Show an examples comment for each field.",
     )
 
+    show_value_hints: bool = Field(
+        False,
+        description=(
+            "Show a commented TOML assignment as a hint before fields rendered with an explicit instance value. "
+            "For fields without a class default, emits an empty placeholder comment."
+        ),
+    )
+
     comment_defaults: bool = Field(
         True,
         description="Comment out fields that have their default value (prefix with #).",
@@ -463,33 +471,6 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         else:
             container[full_key] = value
 
-    def _add_default_hint_when_has_value(
-        self,
-        container: Any,
-        field: FieldInfoModel,
-        field_key: str,
-        full_key: str,
-        prefix: str,
-        is_dict_entry: bool = False,
-    ) -> None:
-        """When an instance value is present, add the class default as a commented hint."""
-        if not self.generator_config.show_default or self.generator_config.default_formatter is None:
-            return
-        if field.is_required or field.default is None:
-            if not is_dict_entry:
-                container.add(comment(f"{full_key} ="))
-        else:
-            value = field.default
-            value = _remove_none_values(value)
-            if value is not None:
-                value = _value_to_toml(value)
-                value = _format_list_value(value, field_key, full_key)
-                value_str = tomlkit.dumps({field_key: value}).strip()
-                if prefix:
-                    value_str = value_str.replace(f"{field_key} =", f"{full_key} =", 1)
-                for line in value_str.split("\n"):
-                    container.add(comment(line))
-
     def _add_commented_default(
         self,
         container: Any,
@@ -515,6 +496,25 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         for line in value_str.split("\n"):
             container.add(comment(line))
 
+    def _add_default_hint_when_has_value(
+        self,
+        container: Any,
+        field: FieldInfoModel,
+        field_key: str,
+        full_key: str,
+        prefix: str,
+        section_path: str,
+        is_dict_entry: bool = False,
+    ) -> None:
+        """When an instance value is present, add the class default as a commented hint."""
+        if not self.generator_config.show_value_hints:
+            return
+        if field.is_required or field.default is None:
+            if not is_dict_entry:
+                container.add(comment(f"{full_key} ="))
+        else:
+            self._add_commented_default(container, field, field_key, full_key, prefix, section_path)
+
     def _add_field_to_container(
         self,
         container: Any,
@@ -532,6 +532,15 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
             container.add(comment(line))
 
         if field.has_value:
+            self._add_default_hint_when_has_value(
+                container,
+                field,
+                field_key,
+                full_key,
+                prefix,
+                section_path,
+                is_dict_entry=is_dict_entry,
+            )
             value = field.value
             value = _remove_none_values(value)
             value = _value_to_toml(value)

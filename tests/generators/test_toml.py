@@ -856,6 +856,55 @@ host = "production.example.com"
     assert result == expected
 
 
+def test_toml_instance_value_hints_with_default() -> None:
+    """Instance values can include a commented default assignment hint."""
+
+    class Settings(BaseSettings):
+        host: str = Field(default="localhost", description="The host")
+
+    instance = Settings(host="production.example.com")
+    info = SettingsInfoModel.from_settings_model(instance)
+
+    generator = TomlGenerator(generator_config=TomlSettings(show_value_hints=True))
+    result = generator.generate(info)
+
+    expected = """\
+# Settings
+
+# host: string
+# The host
+# Default: "localhost"
+# host = "localhost"
+host = "production.example.com"
+"""
+    assert result == expected
+
+
+def test_toml_instance_value_hints_with_placeholder() -> None:
+    """Instance values can include an empty placeholder when no class default exists."""
+
+    class Settings(BaseSettings):
+        value: str | None = None
+
+    instance = Settings(value="configured")
+    info = SettingsInfoModel.from_settings_model(instance)
+
+    generator = TomlGenerator(
+        generator_config=TomlSettings(
+            show_types=False, show_description=False, show_default=False, show_value_hints=True
+        )
+    )
+    result = generator.generate(info)
+
+    expected = """\
+# Settings
+
+# value =
+value = "configured"
+"""
+    assert result == expected
+
+
 def test_toml_instance_same_as_default_behaves_like_class() -> None:
     """When value equals default, should behave like class."""
 
