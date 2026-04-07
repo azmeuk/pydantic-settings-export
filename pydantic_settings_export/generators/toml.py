@@ -164,6 +164,21 @@ def _format_inline_comment_value(value: Any, list_dict_mode: TomlListDictMode) -
     return value
 
 
+def _get_container_body(container: Any) -> Any:
+    """Get the underlying tomlkit body list for a document or table."""
+    body = getattr(container, "body", None)
+    if body is None:
+        body = getattr(getattr(container, "value", None), "body", None)
+    return body
+
+
+def _add_block_separator(container: Any) -> None:
+    """Add one blank line before a new emitted block when the container already has content."""
+    body = _get_container_body(container)
+    if body and not isinstance(body[-1][1], TomlkitWhitespace):
+        container.add(nl())
+
+
 def default_header_formatter(name: str, docstring: str) -> str:
     """Format a settings/section header."""
     lines = []
@@ -451,6 +466,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         formatted = self._format_header_comment(name, docstring)
         if formatted:
+            _add_block_separator(container)
             for line in formatted.split("\n"):
                 container.add(comment(line))
             container.add(nl())
@@ -466,6 +482,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         formatted = self._format_description_comment(description)
         if formatted:
+            _add_block_separator(container)
             for line in formatted.split("\n"):
                 container.add(comment(line))
             container.add(nl())
@@ -572,6 +589,7 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         """Add a field to a TOML document or section container."""
         field_key = self._make_toml_key(field)
         full_key = f"{prefix}{field_key}" if prefix else field_key
+        _add_block_separator(container)
 
         comment_lines = self._format_field_comment(field, key_name=full_key if prefix else None)
         for line in comment_lines:
@@ -606,8 +624,6 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
 
         else:
             self._add_commented_default(container, field, field_key, full_key, prefix, section_path)
-
-        container.add(nl())
 
     def _add_child_as_dotted_keys(self, container: Any, child: SettingsInfoModel, dotted_prefix: str) -> None:
         """Add a child settings using dotted key syntax."""
@@ -661,26 +677,6 @@ class TomlGenerator(AbstractGenerator[TomlSettings]):
         section_path: str | None = None,
     ) -> None:
         """Add a child settings as a TOML section, including nested child settings recursively."""
-        container_body = getattr(container, "body", None)
-        if container_body is None:
-            container_body = getattr(getattr(container, "value", None), "body", None)
-
-        will_emit_header = (
-            self.generator_config.show_header
-            and self.generator_config.header_formatter is not None
-            and bool(child.name or child.docs)
-        )
-
-        if (
-            container_body
-            and len(container_body) > 1
-            and isinstance(container_body[-1][1], TomlkitWhitespace)
-            and container_body[-2][0] is not None
-            and not child.field_description
-            and not will_emit_header
-        ):
-            container_body.pop()
-
         if child.field_description:
             self._add_description_comments(container, child.field_description)
 

@@ -1117,7 +1117,7 @@ def test_toml_generator_with_list_of_dicts_in_nested_section() -> None:
         """Child settings."""
 
         filters: list[dict[str, str]] = Field(
-            default_factory=lambda: [{"name": "admin"}, {"group": "admins"}],
+            default_factory=lambda: [{"kind": "alpha"}, {"kind": "beta"}],
             description="List of filters",
         )
 
@@ -1139,12 +1139,12 @@ def test_toml_generator_with_list_of_dicts_in_nested_section() -> None:
 [child]
 # filters: array
 # List of filters
-# Default: [{"name":"admin"},{"group":"admins"}]
+# Default: [{"kind":"alpha"},{"kind":"beta"}]
 # [[child.filters]]
-# name = "admin"
+# kind = "alpha"
 #
 # [[child.filters]]
-# group = "admins"
+# kind = "beta"
 """
     assert result == expected
 
@@ -1156,7 +1156,7 @@ def test_toml_generator_with_list_of_dicts_in_nested_section_inline_mode() -> No
         """Child settings."""
 
         filters: list[dict[str, str]] = Field(
-            default_factory=lambda: [{"name": "admin"}, {"group": "admins"}],
+            default_factory=lambda: [{"kind": "alpha"}, {"kind": "beta"}],
             description="List of filters",
         )
 
@@ -1178,10 +1178,65 @@ def test_toml_generator_with_list_of_dicts_in_nested_section_inline_mode() -> No
 [child]
 # filters: array
 # List of filters
-# Default: [{"name":"admin"},{"group":"admins"}]
-# filters = [{name = "admin"}, {group = "admins"}]
+# Default: [{"kind":"alpha"},{"kind":"beta"}]
+# filters = [{kind = "alpha"}, {kind = "beta"}]
 """
     assert result == expected
+
+
+def test_toml_generator_avoids_triple_blank_lines_between_sections() -> None:
+    """Section rendering should not produce triple blank lines between sections."""
+
+    class Nested(BaseSettings):
+        rules: list[dict[str, str]] = Field(default_factory=lambda: [{"id": "one"}])
+
+    class Root(BaseSettings):
+        nested: Nested = Field(default_factory=Nested)
+        other: str | None = None
+
+    generator = TomlGenerator(
+        generator_config=TomlSettings(
+            show_header=False,
+            show_types=False,
+            show_description=False,
+            show_default=False,
+            show_examples=False,
+            show_value_hints=True,
+            list_dict_mode="inline",
+            prefix="root",
+        )
+    )
+    result = generator.generate(SettingsInfoModel.from_settings_model(Root))
+
+    assert "\n\n\n[" not in result
+
+
+def test_toml_generator_keeps_single_blank_line_before_section_comment_block() -> None:
+    """A section followed by a described child section should keep exactly one blank line."""
+
+    class First(BaseSettings):
+        value: str | None = None
+
+    class Second(BaseSettings):
+        key: str | None = None
+
+    class Settings(BaseSettings):
+        first: First = Field(default_factory=First)
+        second: Second | None = Field(None, description="Secondary settings.")
+
+    generator = TomlGenerator(
+        generator_config=TomlSettings(
+            show_header=False,
+            show_types=False,
+            show_default=False,
+            show_examples=False,
+            show_value_hints=True,
+        )
+    )
+    result = generator.generate(SettingsInfoModel.from_settings_model(Settings))
+
+    assert "# value =\n\n# Secondary settings.\n" in result
+    assert "# value =\n\n\n# Secondary settings.\n" not in result
 
 
 def test_toml_remove_none_from_list() -> None:
